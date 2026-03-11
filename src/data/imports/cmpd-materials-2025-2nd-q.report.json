@@ -1,0 +1,274 @@
+{
+  "inputPath": "C:\\Users\\Michael\\Documents\\AppDev\\Integration_0.1\\Costimator\\cmpd-materials-2025-2nd-q.csv",
+  "totalRows": 374,
+  "validRows": 0,
+  "skippedEmpty": 0,
+  "skippedMissingCode": 0,
+  "skippedMissingDescription": 0,
+  "skippedMissingUnit": 0,
+  "skippedCategoryRows": 0,
+  "skippedInvalidPrice": 374,
+  "skippedDuplicates": 0,
+  "invalidSamples": [
+    {
+      "row": 2,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0001",
+        "COMMON BORROW",
+        "CUM",
+        "590.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 3,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0002",
+        "SELECTED BORROW",
+        "CUM",
+        "665.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 4,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0003",
+        "AGGREGATE SUBBASE COURSE",
+        "CUM",
+        "650.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 5,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0004",
+        "AGGREGATE BASE COURSE",
+        "CUM",
+        "840.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 6,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0005",
+        "AGGREGATE BASE COURSE (CRUSHED)",
+        "CUM",
+        "790.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 7,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0006",
+        "AGGREGATE SURFACE COURSE",
+        "CUM",
+        "880.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 8,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0007",
+        "AGGREGATE SURFACE COURSE (CRUSHED)",
+        "CUM",
+        "850.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 9,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0008",
+        "FINE AGGREGATE (SAND)",
+        "CUM",
+        "735.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 10,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0009",
+        "GRAVEL, 3/4\" (MAS 20 mm)",
+        "CUM",
+        "1100.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 11,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0010",
+        "GRAVEL, G1 (MAS 40 mm)",
+        "CUM",
+        "1100.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 12,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0011",
+        "GRAVEL, NATURAL",
+        "CUM",
+        "890.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 13,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0012",
+        "STONE, CLASS A (15 - 25 kg)",
+        "CUM",
+        "1050.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 14,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0013",
+        "STONE, CLASS B (30 - 70 kg)",
+        "CUM",
+        "850.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 15,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0014",
+        "STONE, CLASS C (60 - 100 kg)",
+        "CUM",
+        "800.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 16,
+      "reason": "invalid_price",
+      "value": [
+        "MG01.0015",
+        "STONE, CLASS D (100 - 200 kg)",
+        "CUM",
+        "740.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 17,
+      "reason": "invalid_price",
+      "value": [
+        "MG02.0001",
+        "ASPHALT CEMENT, PENETRATION GRADE 30-50",
+        "MTON",
+        "65500.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 18,
+      "reason": "invalid_price",
+      "value": [
+        "MG02.0002",
+        "ASPHALT CEMENT, PENETRATION GRADE 60-70",
+        "MTON",
+        "66000.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 19,
+      "reason": "invalid_price",
+      "value": [
+        "MG02.0003",
+        "ASPHALT CEMENT, PENETRATION GRADE 85-100",
+        "MTON",
+        "66900.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 20,
+      "reason": "invalid_price",
+      "value": [
+        "MG02.0004",
+        "ASPHALT CEMENT, PENETRATION GRADE 120-150",
+        "MTON",
+        "48900.00",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "row": 21,
+      "reason": "invalid_price",
+      "value": [
+        "MG02.0005",
+        "ASPHALT CONCRETE, COLD-LAID (PLANT MIX)",
+        "MTON",
+        "10000.00",
+        "",
+        "",
+        ""
+      ]
+    }
+  ]
+}

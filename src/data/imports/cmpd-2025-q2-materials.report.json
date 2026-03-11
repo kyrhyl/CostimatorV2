@@ -1,0 +1,334 @@
+{
+  "inputPath": "C:\\Users\\Michael\\Downloads\\2025-2nd-Q-CMPD-June-2025-Labor-Rates-2021-ACEL-Rates - MATERIALS.csv",
+  "totalRows": 462,
+  "validRows": 374,
+  "skippedEmpty": 2,
+  "skippedMissingCode": 62,
+  "skippedMissingDescription": 0,
+  "skippedMissingUnit": 0,
+  "skippedCategoryRows": 21,
+  "skippedInvalidPrice": 3,
+  "skippedDuplicates": 0,
+  "invalidSamples": [
+    {
+      "row": 43,
+      "reason": "invalid_price",
+      "value": [
+        "MG03.0001",
+        "MASONRY CEMENT / HYDRATED LIME, TYPE N (40 kg)",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "BAG",
+        "#REF!"
+      ]
+    },
+    {
+      "row": 44,
+      "reason": "invalid_price",
+      "value": [
+        "MG03.0002",
+        "PORTLAND CEMENT (40 kg)",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "BAG",
+        "#REF!"
+      ]
+    },
+    {
+      "row": 45,
+      "reason": "invalid_price",
+      "value": [
+        "MG03.0003",
+        "PORTLAND-POZZOLAN CEMENT, TYPE 1P (40 kg)",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "BAG",
+        "#REF!"
+      ]
+    },
+    {
+      "row": 402,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "FARBRICATED MATERIALS",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "NONE",
+        ""
+      ]
+    },
+    {
+      "row": 403,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Flush Hollow Core Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  736.71 "
+      ]
+    },
+    {
+      "row": 404,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Pvc Doors",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  728.00 "
+      ]
+    },
+    {
+      "row": 405,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Flush Type Solid Core Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  1,264.95 "
+      ]
+    },
+    {
+      "row": 406,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Narra Paneled Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  6,240.00 "
+      ]
+    },
+    {
+      "row": 407,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Tanguile Paneled Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  5,720.00 "
+      ]
+    },
+    {
+      "row": 408,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Aluminum Glass Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  2,808.00 "
+      ]
+    },
+    {
+      "row": 409,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Glass Transom On Wood",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  2,100.00 "
+      ]
+    },
+    {
+      "row": 410,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Accordion Type Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  2,200.00 "
+      ]
+    },
+    {
+      "row": 411,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Varifold Type Door",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  3,141.00 "
+      ]
+    },
+    {
+      "row": 412,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Awning Type Steel Casement Windows",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  2,680.00 "
+      ]
+    },
+    {
+      "row": 413,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Swing Type Steel Casement Windows",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  1,768.00 "
+      ]
+    },
+    {
+      "row": 414,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Jalousie Window (Glass)",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  830.00 "
+      ]
+    },
+    {
+      "row": 415,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Fixed Glass Window On Metal Frame",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  749.00 "
+      ]
+    },
+    {
+      "row": 416,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Fixed Louvered Steel Window",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  1,248.00 "
+      ]
+    },
+    {
+      "row": 417,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Awning Aluminum Windows",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  3,536.00 "
+      ]
+    },
+    {
+      "row": 418,
+      "reason": "missing_code",
+      "value": [
+        "",
+        "Casement Aluminum Window",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "sq.m.",
+        "  3,536.00 "
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+/**
+ * A4 Page wrapper component styles
+ * Used for on-screen preview mode
+ */
+
+/* A4 Page Container */
+.a4-page {
+  background: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  margin: 20px auto;
+  padding: 5mm 10mm 5mm 10mm;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.a4-page[data-orientation='landscape'] {
+  width: 297mm;
+  min-height: 210mm;
+}
+
+.a4-page[data-orientation='portrait'] {
+  width: 210mm;
+  min-height: 297mm;
+}
+
+/* Page indicator - visible on screen only */
+.a4-page::after {
+  content: "Page " attr(data-page);
+  position: absolute;
+  bottom: 5mm;
+  right: 10mm;
+  font-size: 8px;
+  color: #999;
+}
+
+/* Container for A4 pages */
+.a4-pages-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  background-color: #f9fafb;
+  min-height: 100vh;
+}
