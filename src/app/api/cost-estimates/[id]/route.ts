@@ -145,3 +145,69 @@ export async function DELETE(
     );
   }
 }
+
+/**
+ * PATCH /api/cost-estimates/[id]
+ * Update editable metadata for a cost estimate
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: estimateId } = await params;
+
+    const isObjectId = /^[a-fA-F0-9]{24}$/.test(estimateId);
+    const isEstimateNumber = /^EST-\d+$/i.test(estimateId);
+
+    if (!isObjectId && !isEstimateNumber) {
+      return NextResponse.json(
+        { error: 'Invalid estimate ID format' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const nextEstimateName = typeof body?.estimateName === 'string' ? body.estimateName.trim() : '';
+    const nextDescription = typeof body?.description === 'string' ? body.description.trim() : undefined;
+
+    if (!nextEstimateName) {
+      return NextResponse.json(
+        { error: 'estimateName is required' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    const estimate = isObjectId
+      ? await CostEstimate.findById(estimateId)
+      : await CostEstimate.findOne({ estimateNumber: estimateId });
+
+    if (!estimate) {
+      return NextResponse.json(
+        { error: 'Cost estimate not found' },
+        { status: 404 }
+      );
+    }
+
+    estimate.estimateName = nextEstimateName;
+    if (nextDescription !== undefined) {
+      estimate.description = nextDescription;
+    }
+
+    await estimate.save();
+
+    return NextResponse.json({
+      success: true,
+      data: estimate,
+      message: 'Cost estimate renamed successfully',
+    });
+  } catch (error: any) {
+    console.error('[Cost Estimate Patch] Error updating cost estimate:', error);
+    return NextResponse.json(
+      { error: 'Failed to update cost estimate', details: error.message },
+      { status: 500 }
+    );
+  }
+}

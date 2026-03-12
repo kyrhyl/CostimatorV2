@@ -73,6 +73,7 @@ export interface IComputedMaterial {
 }
 
 export interface IEstimateLine {
+  lineId?: string;
   // BOQ source
   payItemNumber: string;
   payItemDescription: string;
@@ -240,6 +241,7 @@ const ComputedMaterialSchema = new Schema({
 }, { _id: false });
 
 const EstimateLineSchema = new Schema({
+  lineId: { type: String, default: '' },
   payItemNumber: { type: String, required: true },
   payItemDescription: { type: String, required: true },
   unit: { type: String, required: true },

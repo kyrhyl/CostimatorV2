@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import Combobox from '@/components/Combobox';
 import type { DupaItemBreakdown, DupaReportData } from '@/types/dupa';
 import { FormDUPAPage } from '../forms/FormDUPAPage';
 
@@ -28,7 +27,7 @@ type EditableItem = Omit<DupaItemBreakdown, 'laborItems' | 'equipmentItems' | 'm
 };
 
 const getItemKey = (item: DupaReportData['items'][number], index: number) =>
-  `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
+  item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
 
 const safe = (value: number) => (Number.isFinite(value) ? value : 0);
 
@@ -46,6 +45,20 @@ const LABOR_KEYS: Array<{ label: string; field: string }> = [
 
 function normalizeLaborLabel(input: string) {
   return input.toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function uniqueSuggestions(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  values.forEach((value) => {
+    const label = value.trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(label);
+  });
+  return result;
 }
 
 function recomputeItem(item: EditableItem): EditableItem {
@@ -119,12 +132,11 @@ export function DupaTab({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<EditableItem | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   const [laborRateMap, setLaborRateMap] = useState<Record<string, number>>({});
   const [equipmentOptions, setEquipmentOptions] = useState<Array<{ _id: string; description: string; hourlyRate?: number }>>([]);
   const [materialOptions, setMaterialOptions] = useState<Array<{ materialCode: string; description: string; unit: string; basePrice?: number }>>([]);
-  const [equipmentSearchLoading, setEquipmentSearchLoading] = useState(false);
-  const [materialSearchLoading, setMaterialSearchLoading] = useState(false);
 
   const keyedItems = useMemo<KeyedItem[]>(
     () => data.items.map((item, index) => ({ item, index, key: getItemKey(item, index) })),
@@ -143,21 +155,6 @@ export function DupaTab({
       return haystack.includes(needle);
     });
   }, [keyedItems, partFilter, searchTerm, adjustedOnly, adjustedKeys]);
-
-  const laborDesignationOptions = useMemo(
-    () => LABOR_KEYS.map((entry) => ({ value: entry.label, label: entry.label })),
-    [],
-  );
-
-  const equipmentDropdownOptions = useMemo(
-    () => equipmentOptions.map((entry) => ({ value: entry._id, label: entry.description })),
-    [equipmentOptions],
-  );
-
-  const materialDropdownOptions = useMemo(
-    () => materialOptions.map((entry) => ({ value: entry.materialCode, label: entry.description })),
-    [materialOptions],
-  );
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -282,10 +279,13 @@ export function DupaTab({
   useEffect(() => {
     if (!selectedEntry) {
       setDraft(null);
+      setEditing(false);
+      setDirty(false);
       return;
     }
     if (editing) return;
     setDraft(recomputeItem(applyLatestMasterValues(selectedEntry.item)));
+    setDirty(false);
   }, [selectedEntry, editing, laborRateMap, equipmentOptions, materialOptions]);
 
   const selectedKey = selectedEntry?.key || null;
@@ -294,47 +294,16 @@ export function DupaTab({
     if (readOnly && editing) setEditing(false);
   }, [readOnly, editing]);
 
-  const handleEquipmentSearch = async (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return;
-    setEquipmentSearchLoading(true);
-    try {
-      const res = await fetch(`/api/master/equipment?search=${encodeURIComponent(trimmed)}`);
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.data)) {
-        setEquipmentOptions(
-          data.data.map((entry: any) => ({ _id: String(entry._id), description: String(entry.description || ''), hourlyRate: Number(entry.hourlyRate || 0) })),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to search equipment', error);
-    } finally {
-      setEquipmentSearchLoading(false);
-    }
+  const confirmDiscardIfNeeded = () => {
+    if (!editing || !dirty) return true;
+    return window.confirm('You have unsaved DUPA changes. Discard and continue?');
   };
 
-  const handleMaterialSearch = async (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return;
-    setMaterialSearchLoading(true);
-    try {
-      const res = await fetch(`/api/master/materials?search=${encodeURIComponent(trimmed)}`);
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.data)) {
-        setMaterialOptions(
-          data.data.map((entry: any) => ({
-            materialCode: String(entry.materialCode || ''),
-            description: String(entry.materialDescription || ''),
-            unit: String(entry.unit || ''),
-            basePrice: Number(entry.basePrice || 0),
-          })),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to search materials', error);
-    } finally {
-      setMaterialSearchLoading(false);
-    }
+  const changeSelectedItem = (key: string) => {
+    if (!confirmDiscardIfNeeded()) return;
+    onSelectedPrintKeyChange(key);
+    setEditing(false);
+    setDirty(false);
   };
 
   const saveCurrent = async () => {
@@ -343,6 +312,7 @@ export function DupaTab({
     try {
       await onSaveDupaAdjustment(selectedKey, recomputeItem(applyLatestMasterValues(draft)));
       setEditing(false);
+      setDirty(false);
     } finally {
       setSaving(false);
     }
@@ -354,230 +324,306 @@ export function DupaTab({
     try {
       await onResetDupaAdjustment(selectedKey);
       setEditing(false);
+      setDirty(false);
     } finally {
       setSaving(false);
     }
   };
+
+  const applyMasterRatesToDraft = () => {
+    if (!draft) return;
+    setDraft(recomputeItem(applyLatestMasterValues(draft)));
+    setDirty(true);
+  };
+
+  const updateDraft = (updater: (current: EditableItem) => EditableItem) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = recomputeItem(updater(current));
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const laborSuggestions = useMemo(() => uniqueSuggestions(LABOR_KEYS.map((entry) => entry.label)), []);
+  const equipmentSuggestions = useMemo(
+    () => uniqueSuggestions(equipmentOptions.map((entry) => entry.description)),
+    [equipmentOptions],
+  );
+  const materialSuggestions = useMemo(
+    () => uniqueSuggestions(materialOptions.map((entry) => entry.description)),
+    [materialOptions],
+  );
 
   if (!data.items.length) {
     return <div className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-600">No DUPA items found for this project.</div>;
   }
 
   return (
-    <div className="space-y-2">
-      <div className="sticky top-20 z-10 bg-white/95 backdrop-blur border border-gray-200 rounded-lg p-2 no-print print:hidden" data-print-hide="true">
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_auto] gap-2 items-center">
+    <div className="space-y-3">
+      <div className="sticky top-20 z-10 rounded-lg border border-gray-200 bg-white/95 p-3 backdrop-blur no-print print:hidden" data-print-hide="true">
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_200px_auto]">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => {
+              if (!confirmDiscardIfNeeded()) return;
+              setSearchTerm(e.target.value);
+            }}
+            placeholder="Search pay item number or description"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
           <select
             value={partFilter}
-            onChange={(e) => setPartFilter(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm"
+            onChange={(e) => {
+              if (!confirmDiscardIfNeeded()) return;
+              setPartFilter(e.target.value);
+            }}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option value="all">All Parts</option>
             {partOptions.map((part) => (
               <option key={part} value={part}>{part}</option>
             ))}
           </select>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search pay item no. or description"
-            className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm"
-          />
-          <label className="inline-flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 rounded-md border border-gray-200 bg-white">
+          <label className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
             <input
               type="checkbox"
               checked={adjustedOnly}
-              onChange={(e) => setAdjustedOnly(e.target.checked)}
+              onChange={(e) => {
+                if (!confirmDiscardIfNeeded()) return;
+                setAdjustedOnly(e.target.checked);
+              }}
               className="h-4 w-4 rounded border-gray-300 text-blue-600"
             />
             Adjusted only
           </label>
         </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5">Total: {keyedItems.length}</span>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">Visible: {filteredItems.length}</span>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Adjusted: {adjustedKeys.length}</span>
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {!filteredItems.length && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-600">
-            No DUPA items match the current filters.
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="rounded-lg border border-gray-200 bg-white no-print print:hidden" data-print-hide="true">
+          <div className="max-h-[70vh] overflow-auto">
+            {!filteredItems.length ? (
+              <p className="p-4 text-sm text-gray-600">No DUPA items match the current filters.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {filteredItems.map((entry) => {
+                  const isSelected = selectedKey === entry.key;
+                  const isAdjusted = adjustedKeys.includes(entry.key);
+                  return (
+                    <li key={entry.key}>
+                      <button
+                        type="button"
+                        onClick={() => changeSelectedItem(entry.key)}
+                        className={`w-full px-3 py-2 text-left transition ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-gray-800">{entry.item.part} · {entry.item.payItemNumber}</p>
+                          {isAdjusted && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">ADJ</span>}
+                        </div>
+                        <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{entry.item.payItemDescription}</p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-        )}
+        </aside>
 
-        {filteredItems.map((entry) => {
-          const isSelected = selectedKey === entry.key;
-          const isAdjusted = adjustedKeys.includes(entry.key);
-          const renderedItem = isSelected && draft ? recomputeItem(draft) : entry.item;
-
-          return (
-            <div key={entry.key} className="space-y-2">
-              <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 no-print print:hidden" data-print-hide="true">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{entry.item.part} - {entry.item.payItemNumber}</p>
-                    <p className="text-xs text-gray-500">{entry.item.payItemDescription}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isAdjusted && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded">ADJUSTED</span>}
-                    {!isSelected && (
+        <div className="space-y-2 min-w-0">
+          {selectedEntry && (
+            <div className="sticky top-[134px] z-[9] rounded-lg border border-gray-200 bg-white/95 p-3 backdrop-blur no-print print:hidden" data-print-hide="true">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{selectedEntry.item.part} - {selectedEntry.item.payItemNumber}</p>
+                  <p className="text-xs text-gray-600">{selectedEntry.item.payItemDescription}</p>
+                  <p className="mt-1 text-xs text-gray-500">Edit directly inside the DUPA form table below.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!readOnly && editing && (
+                    <button
+                      type="button"
+                      onClick={applyMasterRatesToDraft}
+                      className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      Sync Latest Rates
+                    </button>
+                  )}
+                  {!readOnly && !editing ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft(recomputeItem(applyLatestMasterValues(selectedEntry.item)));
+                        setEditing(true);
+                        setDirty(false);
+                      }}
+                      className="rounded-md border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                    >
+                      Edit Inline
+                    </button>
+                  ) : null}
+                  {!readOnly && editing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={saveCurrent}
+                        disabled={saving || !dirty}
+                        className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
-                          onSelectedPrintKeyChange(entry.key);
                           setEditing(false);
+                          setDirty(false);
+                          if (selectedEntry) {
+                            setDraft(recomputeItem(applyLatestMasterValues(selectedEntry.item)));
+                          }
                         }}
-                        className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        Set active
+                        Cancel
                       </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {!readOnly && isSelected && renderedItem && (
-                <div className="bg-white border border-gray-200 rounded-lg p-3 no-print print:hidden" data-print-hide="true">
-              <div className="flex flex-wrap items-center gap-2 justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">Edit DUPA Build-Up</p>
-                  <p className="text-xs text-gray-500">Using latest master rates on load. Quantity remains fixed by BOQ/takeoff.</p>
-                </div>
-                <div className="flex gap-2">
-                  {!editing ? (
-                    <button type="button" onClick={() => { setDraft(recomputeItem(applyLatestMasterValues(entry.item))); setEditing(true); }} className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-700 hover:bg-blue-50">Edit DUPA</button>
-                  ) : (
-                    <>
-                      <button type="button" onClick={saveCurrent} disabled={saving} className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60">{saving ? 'Saving...' : 'Save'}</button>
-                      <button type="button" onClick={() => { setEditing(false); setDraft(recomputeItem(applyLatestMasterValues(entry.item))); }} className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50">Cancel</button>
                     </>
-                  )}
-                  {adjustedKeys.includes(selectedKey || '') && onResetDupaAdjustment && (
-                    <button type="button" onClick={resetCurrent} disabled={saving} className="px-3 py-1.5 text-sm rounded border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-60">Reset</button>
+                  ) : null}
+                  {!readOnly && adjustedKeys.includes(selectedKey || '') && onResetDupaAdjustment && (
+                    <button
+                      type="button"
+                      onClick={resetCurrent}
+                      disabled={saving}
+                      className="rounded-md border border-amber-300 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                    >
+                      Reset
+                    </button>
                   )}
                 </div>
               </div>
-
-              {editing && draft && (
-                <div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="rounded border border-gray-200 p-2">
-                      <p className="text-xs font-semibold text-gray-700 mb-1">Labor</p>
-                      {draft.laborItems.map((row, i) => (
-                        <div key={`l-${i}`} className="mb-2">
-                          <Combobox
-                            options={laborDesignationOptions}
-                            value={row.designation}
-                            onChange={(value) => {
-                              const mappedRate = laborRateMap[normalizeLaborLabel(value)] || 0;
-                              setDraft((prev) => prev ? recomputeItem({
-                                ...prev,
-                                laborItems: prev.laborItems.map((x, idx) => idx === i ? { ...x, designation: value, hourlyRate: mappedRate } : x),
-                              }) : prev);
-                            }}
-                            placeholder="Select labor designation"
-                            className="text-xs"
-                          />
-                          <div className="grid grid-cols-3 gap-1 mt-1">
-                            <input type="number" value={row.noOfPersons} onChange={(e) => setDraft((prev) => prev ? recomputeItem({ ...prev, laborItems: prev.laborItems.map((x, idx) => idx === i ? { ...x, noOfPersons: Number(e.target.value || 0) } : x) }) : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" placeholder="Persons" />
-                            <input type="number" value={row.noOfHours} onChange={(e) => setDraft((prev) => prev ? recomputeItem({ ...prev, laborItems: prev.laborItems.map((x, idx) => idx === i ? { ...x, noOfHours: Number(e.target.value || 0) } : x) }) : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" placeholder="Hours" />
-                            <input type="number" value={row.hourlyRate} disabled className="px-2 py-1 border border-gray-200 rounded text-xs bg-gray-50" placeholder="Rate" />
-                          </div>
-                          <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, laborItems: prev.laborItems.filter((_, idx) => idx !== i) }) : prev)} className="text-[11px] text-red-600 hover:text-red-700 mt-1">Remove labor row</button>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, laborItems: [...prev.laborItems, { designation: '', noOfPersons: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }) : prev)} className="text-xs text-blue-700">+ Add labor</button>
-                    </div>
-
-                    <div className="rounded border border-gray-200 p-2">
-                      <p className="text-xs font-semibold text-gray-700 mb-1">Equipment</p>
-                      {draft.equipmentItems.map((row, i) => (
-                        <div key={`e-${i}`} className="mb-2">
-                          <Combobox
-                            options={equipmentDropdownOptions}
-                            value={row.equipmentId || ''}
-                            selectedLabel={row.description}
-                            onSearch={handleEquipmentSearch}
-                            loading={equipmentSearchLoading}
-                            onChange={(value) => {
-                              const selected = equipmentOptions.find((entry) => entry._id === value);
-                              setDraft((prev) => prev ? recomputeItem({
-                                ...prev,
-                                equipmentItems: prev.equipmentItems.map((x, idx) =>
-                                  idx === i
-                                    ? { ...x, equipmentId: value, description: selected?.description || '', hourlyRate: selected?.hourlyRate || 0 }
-                                    : x,
-                                ),
-                              }) : prev);
-                            }}
-                            placeholder="Search equipment"
-                            className="text-xs"
-                          />
-                          <div className="grid grid-cols-3 gap-1 mt-1">
-                            <input type="number" value={row.noOfUnits} onChange={(e) => setDraft((prev) => prev ? recomputeItem({ ...prev, equipmentItems: prev.equipmentItems.map((x, idx) => idx === i ? { ...x, noOfUnits: Number(e.target.value || 0) } : x) }) : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" placeholder="Units" />
-                            <input type="number" value={row.noOfHours} onChange={(e) => setDraft((prev) => prev ? recomputeItem({ ...prev, equipmentItems: prev.equipmentItems.map((x, idx) => idx === i ? { ...x, noOfHours: Number(e.target.value || 0) } : x) }) : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" placeholder="Hours" />
-                            <input type="number" value={row.hourlyRate} disabled className="px-2 py-1 border border-gray-200 rounded text-xs bg-gray-50" placeholder="Rate" />
-                          </div>
-                          <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, equipmentItems: prev.equipmentItems.filter((_, idx) => idx !== i) }) : prev)} className="text-[11px] text-red-600 hover:text-red-700 mt-1">Remove equipment row</button>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, equipmentItems: [...prev.equipmentItems, { equipmentId: '', description: '', noOfUnits: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }) : prev)} className="text-xs text-blue-700">+ Add equipment</button>
-                    </div>
-
-                    <div className="rounded border border-gray-200 p-2">
-                      <p className="text-xs font-semibold text-gray-700 mb-1">Materials</p>
-                      {draft.materialItems.map((row, i) => (
-                        <div key={`m-${i}`} className="mb-2">
-                          <Combobox
-                            options={materialDropdownOptions}
-                            value={row.materialCode || ''}
-                            selectedLabel={row.description}
-                            onSearch={handleMaterialSearch}
-                            loading={materialSearchLoading}
-                            onChange={(value) => {
-                              const selected = materialOptions.find((entry) => entry.materialCode === value);
-                              setDraft((prev) => prev ? recomputeItem({
-                                ...prev,
-                                materialItems: prev.materialItems.map((x, idx) =>
-                                  idx === i
-                                    ? {
-                                        ...x,
-                                        materialCode: value,
-                                        description: selected?.description || '',
-                                        unit: selected?.unit || '',
-                                        unitCost: selected?.basePrice || 0,
-                                      }
-                                    : x,
-                                ),
-                              }) : prev);
-                            }}
-                            placeholder="Search material"
-                            className="text-xs"
-                          />
-                          <div className="grid grid-cols-3 gap-1 mt-1">
-                            <input value={row.unit} disabled className="px-2 py-1 border border-gray-200 rounded text-xs bg-gray-50" placeholder="Unit" />
-                            <input type="number" value={row.quantity} onChange={(e) => setDraft((prev) => prev ? recomputeItem({ ...prev, materialItems: prev.materialItems.map((x, idx) => idx === i ? { ...x, quantity: Number(e.target.value || 0) } : x) }) : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" placeholder="Qty" />
-                            <input type="number" value={row.unitCost} disabled className="px-2 py-1 border border-gray-200 rounded text-xs bg-gray-50" placeholder="Unit cost" />
-                          </div>
-                          <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, materialItems: prev.materialItems.filter((_, idx) => idx !== i) }) : prev)} className="text-[11px] text-red-600 hover:text-red-700 mt-1">Remove material row</button>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => setDraft((prev) => prev ? recomputeItem({ ...prev, materialItems: [...prev.materialItems, { materialCode: '', description: '', unit: '', quantity: 0, unitCost: 0, amount: 0 }] }) : prev)} className="text-xs text-blue-700">+ Add material</button>
-                    </div>
-                  </div>
-                </div>
+              {editing && (
+                <p className="mt-2 text-xs font-medium text-amber-700">
+                  {dirty ? 'You have unsaved changes.' : 'Edit values directly in the form. Save when done.'}
+                </p>
               )}
-                </div>
-              )}
-
-              <FormDUPAPage
-                report={data}
-                item={renderedItem}
-                pageNumber="DUPA-Preview"
-                formatCurrency={formatCurrency}
-                formatNumber={formatNumber}
-              />
             </div>
-          );
-        })}
+          )}
+
+          {selectedEntry && (draft || selectedEntry.item) && (
+            <FormDUPAPage
+              report={data}
+              item={(editing && draft ? draft : selectedEntry.item) as DupaItemBreakdown}
+              pageNumber="DUPA-Preview"
+              formatCurrency={formatCurrency}
+              formatNumber={formatNumber}
+              editable={!readOnly && editing}
+              laborSuggestions={laborSuggestions}
+              equipmentSuggestions={equipmentSuggestions}
+              materialSuggestions={materialSuggestions}
+              onLaborFieldChange={(index, field, value) => {
+                updateDraft((current) => {
+                  const laborItems = current.laborItems.map((row, rowIndex) => {
+                    if (rowIndex !== index) return row;
+                    const next = { ...row };
+                    if (field === 'designation') {
+                      next.designation = String(value);
+                      const mappedRate = laborRateMap[normalizeLaborLabel(next.designation)];
+                      if (mappedRate !== undefined) next.hourlyRate = mappedRate;
+                    } else {
+                      (next as any)[field] = Number(value || 0);
+                    }
+                    return next;
+                  });
+                  return { ...current, laborItems };
+                });
+              }}
+              onEquipmentFieldChange={(index, field, value) => {
+                updateDraft((current) => {
+                  const equipmentItems = current.equipmentItems.map((row, rowIndex) => {
+                    if (rowIndex !== index) return row;
+                    const next = { ...row };
+                    if (field === 'description') {
+                      next.description = String(value);
+                      const selected = equipmentOptions.find((option) => option.description === next.description);
+                      if (selected) {
+                        next.equipmentId = selected._id;
+                        next.hourlyRate = Number(selected.hourlyRate || 0);
+                      }
+                    } else {
+                      (next as any)[field] = Number(value || 0);
+                    }
+                    return next;
+                  });
+                  return { ...current, equipmentItems };
+                });
+              }}
+              onMaterialFieldChange={(index, field, value) => {
+                updateDraft((current) => {
+                  const materialItems = current.materialItems.map((row, rowIndex) => {
+                    if (rowIndex !== index) return row;
+                    const next = { ...row };
+                    if (field === 'description') {
+                      next.description = String(value);
+                      const selected = materialOptions.find((option) => option.description === next.description);
+                      if (selected) {
+                        next.materialCode = selected.materialCode;
+                        next.unit = selected.unit;
+                        next.unitCost = Number(selected.basePrice || 0);
+                      }
+                    } else if (field === 'unit') {
+                      next.unit = String(value);
+                    } else {
+                      (next as any)[field] = Number(value || 0);
+                    }
+                    return next;
+                  });
+                  return { ...current, materialItems };
+                });
+              }}
+              onAddLaborRow={() => {
+                updateDraft((current) => ({
+                  ...current,
+                  laborItems: [...current.laborItems, { designation: '', noOfPersons: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }],
+                }));
+              }}
+              onAddEquipmentRow={() => {
+                updateDraft((current) => ({
+                  ...current,
+                  equipmentItems: [...current.equipmentItems, { equipmentId: '', description: '', noOfUnits: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }],
+                }));
+              }}
+              onAddMaterialRow={() => {
+                updateDraft((current) => ({
+                  ...current,
+                  materialItems: [...current.materialItems, { materialCode: '', description: '', unit: '', quantity: 0, unitCost: 0, amount: 0 }],
+                }));
+              }}
+              onRemoveLaborRow={(index) => {
+                updateDraft((current) => ({
+                  ...current,
+                  laborItems: current.laborItems.filter((_, rowIndex) => rowIndex !== index),
+                }));
+              }}
+              onRemoveEquipmentRow={(index) => {
+                updateDraft((current) => ({
+                  ...current,
+                  equipmentItems: current.equipmentItems.filter((_, rowIndex) => rowIndex !== index),
+                }));
+              }}
+              onRemoveMaterialRow={(index) => {
+                updateDraft((current) => ({
+                  ...current,
+                  materialItems: current.materialItems.filter((_, rowIndex) => rowIndex !== index),
+                }));
+              }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

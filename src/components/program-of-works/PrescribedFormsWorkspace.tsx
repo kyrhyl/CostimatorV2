@@ -16,16 +16,18 @@ const DupaPrintBundle = dynamic(() => import('./print/DupaPrintBundle').then((mo
 
 interface PrescribedFormsWorkspaceProps {
   projectId: string;
+  mode?: string;
+  estimateId?: string;
 }
 
 type FormTab = 'pow' | 'abc' | 'dupa';
 
-export default function PrescribedFormsWorkspace({ projectId }: PrescribedFormsWorkspaceProps) {
+export default function PrescribedFormsWorkspace({ projectId, mode, estimateId }: PrescribedFormsWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<FormTab>('pow');
   const [printBundlesReady, setPrintBundlesReady] = useState(false);
   const [selectedDupaPrintKey, setSelectedDupaPrintKey] = useState<string | null>(null);
 
-  const { data, loading, error, refetch } = usePrescribedFormsData(projectId);
+  const { data, loading, error, refetch } = usePrescribedFormsData(projectId, { mode, estimateId });
 
   const preparePrintBundles = useCallback(() => {
     setPrintBundlesReady(true);

@@ -9,6 +9,7 @@ import DUPATemplate from '@/models/DUPATemplate';
 import mongoose from 'mongoose';
 import { getDivisionForPart, normalizePart, PART_DESCRIPTIONS, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { computePercentOfProjectCost } from '@/lib/utils/pow-math';
+import { normalizePowMode } from '@/lib/utils/dupa-identity';
 
 interface BOQLineItem {
   payItemNumber: string;
@@ -18,6 +19,7 @@ interface BOQLineItem {
   directCost: number;
   totalAmount: number;
   ocmCost: number;
+  cpCost?: number;
   vatCost: number;
   laborItems?: Array<{ amount: number }>;
   equipmentItems?: Array<{ amount: number }>;
@@ -49,15 +51,82 @@ export async function GET(
       );
     }
 
-    const boqItems = await ProjectBOQ.find({ projectId: id })
-      .populate('templateId')
-      .lean();
+    const { searchParams } = new URL(req.url);
+    const mode = normalizePowMode(searchParams.get('mode'));
+    const estimateId = String(searchParams.get('estimateId') || '').trim();
 
+    const boqItems = await ProjectBOQ.find({ projectId: id }).populate('templateId').lean();
     const estimate = await Estimate.findOne({ projectId: id }).lean();
-    
-    const costEstimates = await CostEstimate.find({ projectId: id })
-      .sort({ createdAt: -1 })
-      .lean();
+
+    let selectedCostEstimate: any = null;
+    if (mode === 'takeoff') {
+      if (estimateId && mongoose.Types.ObjectId.isValid(estimateId)) {
+        selectedCostEstimate = await CostEstimate.findOne({ _id: estimateId, projectId: id }).lean();
+      }
+      if (!selectedCostEstimate) {
+        selectedCostEstimate = await CostEstimate.findOne({ projectId: id }).sort({ createdAt: -1 }).lean();
+      }
+    }
+
+    const costEstimates = selectedCostEstimate ? [selectedCostEstimate] : [];
+
+    const mapCostEstimateLine = (line: any) => {
+      const quantity = Number(line.quantity || 0);
+      const directUnit = Number(line.directCost || 0);
+      const ocmUnit = Number(line.ocmCost || 0);
+      const cpUnit = Number(line.cpCost || 0);
+      const vatUnit = Number(line.vatCost || 0);
+      const totalAmount = Number(line.totalAmount || 0);
+
+      return {
+        payItemNumber: line.payItemNumber || '',
+        payItemDescription: line.payItemDescription || '',
+        quantity,
+        unitOfMeasurement: line.unit || '',
+        directCost: directUnit * quantity,
+        totalAmount,
+        ocmCost: ocmUnit * quantity,
+        cpCost: cpUnit * quantity,
+        vatCost: vatUnit * quantity,
+        laborCost: Number(line.laborCost || 0) * quantity,
+        materialCost: Number(line.materialCost || 0) * quantity,
+        equipmentCost: Number(line.equipmentCost || 0) * quantity,
+        part: line.part || '',
+        partDescription: '',
+        laborItems: line.laborItems || [],
+        equipmentItems: line.equipmentItems || [],
+        materialItems: line.materialItems || [],
+      };
+    };
+
+    const mapProjectBoqItem = (item: any) => {
+      const quantity = Number(item.quantity || 0);
+      const directUnit = Number(item.directCost || 0);
+      const ocmUnit = Number(item.ocmCost || 0);
+      const cpUnit = Number(item.cpCost || 0);
+      const vatUnit = Number(item.vatCost || 0);
+      const totalAmount = Number(item.totalAmount || 0);
+
+      return {
+        payItemNumber: item.payItemNumber || '',
+        payItemDescription: item.payItemDescription || '',
+        quantity,
+        unitOfMeasurement: item.unitOfMeasurement || item.unit || '',
+        directCost: directUnit * quantity,
+        totalAmount,
+        ocmCost: ocmUnit * quantity,
+        cpCost: cpUnit * quantity,
+        vatCost: vatUnit * quantity,
+        laborCost: Number(item.laborCost || 0) * quantity,
+        materialCost: Number(item.materialCost || 0) * quantity,
+        equipmentCost: Number(item.equipmentCost || 0) * quantity,
+        part: item.part || (item.templateId as any)?.part || '',
+        partDescription: (item.templateId as any)?.category || '',
+        laborItems: item.laborItems || [],
+        equipmentItems: item.equipmentItems || [],
+        materialItems: item.materialItems || [],
+      };
+    };
 
     console.log('=== POW Report Debug ===');
     console.log('Project ID:', id);
@@ -67,27 +136,10 @@ export async function GET(
     
     let allItems: any[] = [];
     
-    if (costEstimates.length > 0 && costEstimates[0].estimateLines?.length > 0) {
+    if (mode === 'takeoff' && costEstimates.length > 0 && costEstimates[0].estimateLines?.length > 0) {
       console.log('Using CostEstimate.estimateLines data...');
-      allItems = costEstimates[0].estimateLines.map((line: any) => ({
-        payItemNumber: line.payItemNumber || '',
-        payItemDescription: line.payItemDescription || '',
-        quantity: line.quantity || 0,
-        unitOfMeasurement: line.unit || '',
-        directCost: line.directCost || 0,
-        totalAmount: line.totalAmount || 0,
-        ocmCost: line.ocmCost || 0,
-        vatCost: line.vatCost || 0,
-        laborCost: line.laborCost || 0,
-        materialCost: line.materialCost || 0,
-        equipmentCost: line.equipmentCost || 0,
-        part: line.part || '',
-        partDescription: '',
-        laborItems: line.laborItems || [],
-        equipmentItems: line.equipmentItems || [],
-        materialItems: line.materialItems || []
-      }));
-    } else if (estimate?.boqLines && estimate.boqLines.length > 0) {
+      allItems = costEstimates[0].estimateLines.map(mapCostEstimateLine);
+    } else if (mode === 'takeoff' && estimate?.boqLines && estimate.boqLines.length > 0) {
       console.log('Using Estimate boqLines data...');
       allItems = estimate.boqLines.map((line: any) => ({
         payItemNumber: line.payItemNumber || line.itemNo || '',
@@ -97,6 +149,7 @@ export async function GET(
         directCost: line.unitPrice ? line.unitPrice * line.quantity : 0,
         totalAmount: line.totalAmount || 0,
         ocmCost: line.breakdown?.ocmSubmitted || 0,
+        cpCost: line.breakdown?.cpSubmitted || 0,
         vatCost: line.breakdown?.vatSubmitted || 0,
         laborCost: line.laborCost || 0,
         materialCost: line.materialCost || 0,
@@ -109,7 +162,7 @@ export async function GET(
       }));
     } else if (boqItems.length > 0) {
       console.log('Using ProjectBOQ data...');
-      allItems = boqItems;
+      allItems = boqItems.map(mapProjectBoqItem);
     }
     
     if (allItems.length === 0) {
@@ -307,6 +360,7 @@ function groupItemsByPart(
       directCost: item.directCost || 0,
       totalAmount: item.totalAmount || 0,
       ocmCost: item.ocmCost || 0,
+      cpCost: item.cpCost || 0,
       vatCost: item.vatCost || 0,
       laborItems: item.laborItems || [],
       equipmentItems: item.equipmentItems || [],
@@ -390,8 +444,9 @@ function groupItemsByPartDetailed(
     const directCost = item.directCost || 0;
     const quantity = item.quantity || 0;
     const ocmCost = item.ocmCost || 0;
+    const cpCost = item.cpCost || 0;
     const vatCost = item.vatCost || 0;
-    const totalWithOverhead = directCost + ocmCost + vatCost;
+    const totalWithOverhead = directCost + ocmCost + cpCost + vatCost;
     
     const unitCost = quantity > 0 ? directCost / quantity : 0;
     const totalUnitCost = quantity > 0 ? totalWithOverhead / quantity : 0;
@@ -501,7 +556,7 @@ function groupItemsByComponentBreakdown(
     const material = item.materialCost || item.materialItems?.reduce((sum: number, mi: any) => sum + (mi.amount || 0), 0) || 0;
     const labor = item.laborCost || item.laborItems?.reduce((sum: number, li: any) => sum + (li.amount || 0), 0) || 0;
     const equipment = item.equipmentCost || item.equipmentItems?.reduce((sum: number, ei: any) => sum + (ei.amount || 0), 0) || 0;
-    const ocm = item.ocmCost || 0;
+    const ocm = (item.ocmCost || 0) + (item.cpCost || 0);
     const vat = item.vatCost || 0;
     const totalCost = item.totalAmount || (directCost + ocm + vat);
     const markupPercent = directCost > 0 ? (ocm / directCost) * 100 : 0;
@@ -568,7 +623,7 @@ function calculateExpenditureBreakdown(boqItems: any[]): {
 
   boqItems.forEach((item) => {
     directCost += item.directCost || 0;
-    ocm += item.ocmCost || 0;
+    ocm += (item.ocmCost || 0) + (item.cpCost || 0);
     vat += item.vatCost || 0;
 
     item.laborItems?.forEach((li: any) => {

@@ -31,6 +31,11 @@ interface UsePrescribedFormsDataResult {
   refetch: () => Promise<void>;
 }
 
+interface PrescribedFormsQueryContext {
+  mode?: string;
+  estimateId?: string;
+}
+
 const INITIAL_DATA: PrescribedFormsDataMap = {
   pow: null,
   abc: null,
@@ -49,7 +54,12 @@ const INITIAL_ERROR = {
   dupa: '',
 };
 
-export function usePrescribedFormsData(projectId: string): UsePrescribedFormsDataResult {
+export function usePrescribedFormsData(
+  projectId: string,
+  queryContext: PrescribedFormsQueryContext = {},
+): UsePrescribedFormsDataResult {
+  const mode = queryContext.mode;
+  const estimateId = queryContext.estimateId;
   const [data, setData] = useState<PrescribedFormsDataMap>(INITIAL_DATA);
   const [loading, setLoading] = useState(INITIAL_LOADING);
   const [error, setError] = useState(INITIAL_ERROR);
@@ -63,12 +73,13 @@ export function usePrescribedFormsData(projectId: string): UsePrescribedFormsDat
       endpoint: 'pow-report',
       fallbackError: 'Failed to load POW report data',
       logLabel: 'POW',
+      query: { mode, estimateId },
     });
 
     setData((prev) => ({ ...prev, pow: result.data }));
     setError((prev) => ({ ...prev, pow: result.error }));
     setLoading((prev) => ({ ...prev, pow: false }));
-  }, [projectId]);
+  }, [projectId, mode, estimateId]);
 
   const refetchAbc = useCallback(async () => {
     setLoading((prev) => ({ ...prev, abc: true }));
@@ -79,12 +90,13 @@ export function usePrescribedFormsData(projectId: string): UsePrescribedFormsDat
       endpoint: 'abc-report',
       fallbackError: 'Failed to load ABC report data',
       logLabel: 'ABC',
+      query: { mode, estimateId },
     });
 
     setData((prev) => ({ ...prev, abc: result.data }));
     setError((prev) => ({ ...prev, abc: result.error }));
     setLoading((prev) => ({ ...prev, abc: false }));
-  }, [projectId]);
+  }, [projectId, mode, estimateId]);
 
   const refetchDupa = useCallback(async () => {
     setLoading((prev) => ({ ...prev, dupa: true }));
@@ -95,12 +107,13 @@ export function usePrescribedFormsData(projectId: string): UsePrescribedFormsDat
       endpoint: 'dupa-report',
       fallbackError: 'Failed to load DUPA report data',
       logLabel: 'DUPA',
+      query: { mode, estimateId },
     });
 
     setData((prev) => ({ ...prev, dupa: result.data }));
     setError((prev) => ({ ...prev, dupa: result.error }));
     setLoading((prev) => ({ ...prev, dupa: false }));
-  }, [projectId]);
+  }, [projectId, mode, estimateId]);
 
   const refetch = useCallback(async () => {
     await Promise.all([refetchPow(), refetchAbc(), refetchDupa()]);

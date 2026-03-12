@@ -64,9 +64,9 @@ export default function ManualPowTemplateModal({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-3xl rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-3 py-3">
+      <div className="w-full max-w-5xl rounded-lg bg-white shadow-xl max-h-[92vh] overflow-hidden">
+        <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <p className="text-base font-semibold text-gray-900">Add Manual BOQ Item</p>
             <p className="text-xs text-gray-500">Shows common DUPA templates by default; searching expands to all active templates.</p>
@@ -76,7 +76,7 @@ export default function ManualPowTemplateModal({
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-4">
+        <div className="space-y-3 px-4 py-3 overflow-y-auto max-h-[calc(92vh-7.5rem)]">
           <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
             <p>
               <strong>Labor Location:</strong> {laborLocation}
@@ -127,7 +127,7 @@ export default function ManualPowTemplateModal({
             </div>
           )}
 
-          <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
+          <div className="max-h-72 overflow-y-auto rounded-md border border-gray-200">
             {templateError ? (
               <p className="px-4 py-3 text-sm text-red-600">{templateError}</p>
             ) : loadingTemplates ? (
@@ -208,7 +208,7 @@ export default function ManualPowTemplateModal({
                 Select DUPA templates above and click "Stage Selected Templates" to prepare quantities.
               </p>
             ) : (
-              <div className="max-h-64 overflow-x-auto overflow-y-auto rounded-md border border-gray-200">
+              <div className="max-h-72 overflow-x-auto overflow-y-auto rounded-md border border-gray-200">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
@@ -256,7 +256,7 @@ export default function ManualPowTemplateModal({
           {bulkError && <p className="text-sm text-red-600">{bulkError}</p>}
         </div>
 
-        <div className="flex justify-end gap-3 border-t px-6 py-4">
+        <div className="flex justify-end gap-3 border-t px-4 py-3">
           <button
             type="button"
             onClick={onClose}

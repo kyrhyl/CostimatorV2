@@ -5,6 +5,10 @@ export interface IPowAdjustment extends Document {
   mode: 'manual' | 'takeoff';
   estimateId?: mongoose.Types.ObjectId | null;
   lineKey: string;
+  dupaItemId?: string;
+  sourceType?: 'projectBoq' | 'estimateLine';
+  sourceId?: string;
+  migrationVersion?: number;
   payItemNumber: string;
   quantity?: number;
   unitCost?: number;
@@ -20,6 +24,10 @@ const PowAdjustmentSchema = new Schema<IPowAdjustment>(
     mode: { type: String, enum: ['manual', 'takeoff'], required: true, index: true },
     estimateId: { type: Schema.Types.ObjectId, ref: 'CostEstimate', default: null, index: true },
     lineKey: { type: String, required: true },
+    dupaItemId: { type: String, default: '', index: true },
+    sourceType: { type: String, enum: ['projectBoq', 'estimateLine'], default: undefined },
+    sourceId: { type: String, default: '' },
+    migrationVersion: { type: Number, default: 0 },
     payItemNumber: { type: String, required: true },
     quantity: { type: Number, min: 0 },
     unitCost: { type: Number, min: 0 },

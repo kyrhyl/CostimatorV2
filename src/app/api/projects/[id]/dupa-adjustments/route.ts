@@ -41,14 +41,19 @@ export async function PUT(
     const body = await request.json();
     const estimateRef = String(body?.estimateRef || '').trim();
     const itemKey = String(body?.itemKey || '').trim();
-    if (!estimateRef || !itemKey) {
-      return NextResponse.json({ success: false, error: 'estimateRef and itemKey are required' }, { status: 400 });
+    const dupaItemId = String(body?.dupaItemId || '').trim();
+    if (!estimateRef || (!itemKey && !dupaItemId)) {
+      return NextResponse.json({ success: false, error: 'estimateRef and either itemKey or dupaItemId are required' }, { status: 400 });
     }
 
     const payload = {
       projectId: id,
       estimateRef,
-      itemKey,
+      itemKey: itemKey || dupaItemId,
+      dupaItemId,
+      sourceType: body?.sourceType,
+      sourceId: String(body?.sourceId || ''),
+      migrationVersion: Number(body?.migrationVersion || 0),
       payItemNumber: String(body?.payItemNumber || ''),
       payItemDescription: String(body?.payItemDescription || ''),
       part: String(body?.part || ''),
@@ -64,7 +69,7 @@ export async function PUT(
     };
 
     const data = await DupaAdjustment.findOneAndUpdate(
-      { projectId: id, estimateRef, itemKey },
+      { projectId: id, estimateRef, itemKey: itemKey || dupaItemId },
       { $set: payload },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
@@ -89,11 +94,12 @@ export async function DELETE(
     const { searchParams } = new URL(request.url);
     const estimateRef = String(searchParams.get('estimateRef') || '').trim();
     const itemKey = String(searchParams.get('itemKey') || '').trim();
-    if (!estimateRef || !itemKey) {
-      return NextResponse.json({ success: false, error: 'estimateRef and itemKey are required' }, { status: 400 });
+    const dupaItemId = String(searchParams.get('dupaItemId') || '').trim();
+    if (!estimateRef || (!itemKey && !dupaItemId)) {
+      return NextResponse.json({ success: false, error: 'estimateRef and either itemKey or dupaItemId are required' }, { status: 400 });
     }
 
-    await DupaAdjustment.deleteOne({ projectId: id, estimateRef, itemKey });
+    await DupaAdjustment.deleteOne({ projectId: id, estimateRef, itemKey: itemKey || dupaItemId });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || 'Failed to delete DUPA adjustment' }, { status: 500 });

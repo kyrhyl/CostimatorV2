@@ -32,7 +32,7 @@ interface ManualPowManagerProps {
   };
   manualItems: ProjectBoqItem[];
   loading: boolean;
-  onReload: () => Promise<void>;
+  onReload: (options?: { silent?: boolean }) => Promise<void>;
   onManualConfigSaved?: () => Promise<void>;
   onManualVersionSaved?: (estimateId?: string) => Promise<void> | void;
 }
@@ -75,6 +75,7 @@ export default function ManualPowManager({
   const [pendingQuantities, setPendingQuantities] = useState<Record<string, number>>({});
   const [updatingRowId, setUpdatingRowId] = useState<string | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
@@ -260,13 +261,14 @@ export default function ManualPowManager({
     }
 
     setBulkSaving(true);
+    setSaveSuccess(null);
     setBulkError(null);
     setError(null);
 
     try {
       await saveStagedManualPowItems(projectId, laborLocation, stagedTemplates);
 
-      await onReload();
+      await onReload({ silent: true });
       closeTemplateModal();
     } catch (err: any) {
       console.error('Failed to add manual BOQ items', err);
@@ -295,6 +297,7 @@ export default function ManualPowManager({
     }
 
     setQuickAddingTemplateId(template._id);
+    setSaveSuccess(null);
     setBulkError(null);
     setError(null);
 
@@ -308,8 +311,7 @@ export default function ManualPowManager({
         category: template.category,
         quantity,
       }]);
-      await onReload();
-      setSaveSuccess(`Added ${template.payItemNumber}.`);
+      await onReload({ silent: true });
       setQuickQuantities((prev) => ({ ...prev, [template._id]: 1 }));
     } catch (err: any) {
       console.error('Failed to add BOQ item quickly', err);
@@ -326,15 +328,15 @@ export default function ManualPowManager({
 
     if (!pending || pending <= 0) {
       setPendingQuantities((prev) => ({ ...prev, [itemId]: originalQuantity }));
-      alert('Quantity must be greater than zero.');
+      setSaveError('Quantity must be greater than zero.');
       return;
     }
 
     try {
       setUpdatingRowId(itemId);
+      setSaveSuccess(null);
       await updateProjectBoqQuantity(itemId, pending);
-      await onReload();
-      setSaveSuccess('Quantity saved.');
+      await onReload({ silent: true });
       setSaveError(null);
     } catch (err: any) {
       console.error('Failed to update quantity', err);
@@ -344,28 +346,34 @@ export default function ManualPowManager({
     }
   };
 
-  const handleDelete = async (itemId: string) => {
+  const requestDelete = (itemId: string) => {
     if (readOnly) return;
-    if (!confirm('Delete this BOQ line? This action cannot be undone.')) return;
+    setConfirmDeleteId(itemId);
+  };
+
+  const handleDelete = async () => {
+    if (readOnly) return;
+    if (!confirmDeleteId) return;
 
     try {
-      setDeletingRowId(itemId);
-      await deleteProjectBoqItem(itemId);
-      await onReload();
-      setSaveSuccess('BOQ item deleted.');
+      setDeletingRowId(confirmDeleteId);
+      setSaveSuccess(null);
+      await deleteProjectBoqItem(confirmDeleteId);
+      await onReload({ silent: true });
       setSaveError(null);
     } catch (err: any) {
       console.error('Failed to delete BOQ item', err);
       setSaveError(err.message || 'Failed to delete BOQ item.');
     } finally {
       setDeletingRowId(null);
+      setConfirmDeleteId(null);
     }
   };
 
   const totalManualAmount = useMemo(() => manualItems.reduce((sum, item) => sum + (item.totalAmount || 0), 0), [manualItems]);
 
   return (
-    <section className="rounded-lg bg-white p-6 shadow">
+    <section className="rounded-lg bg-white p-4 shadow">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-700">Manual Program of Works</p>
@@ -420,7 +428,7 @@ export default function ManualPowManager({
           </button>
           <button
             type="button"
-            onClick={onReload}
+            onClick={() => void onReload()}
             className="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             Refresh
@@ -445,8 +453,35 @@ export default function ManualPowManager({
         totalManualAmount={totalManualAmount}
         onPendingQuantityChange={(itemId, quantity) => setPendingQuantities((prev) => ({ ...prev, [itemId]: quantity }))}
         onQuantityBlur={handleQuantityBlur}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
       />
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900">Delete BOQ line?</h3>
+            <p className="mt-2 text-sm text-gray-600">This action cannot be undone.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deletingRowId === confirmDeleteId}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deletingRowId === confirmDeleteId}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingRowId === confirmDeleteId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ManualPowTemplateModal
         show={showTemplateModal}

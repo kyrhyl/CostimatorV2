@@ -27,6 +27,10 @@ export interface DupaMaterialLine {
 }
 
 export interface DupaItemBreakdown {
+  dupaItemId?: string;
+  sourceType?: 'projectBoq' | 'estimateLine';
+  sourceId?: string;
+  estimateLineId?: string;
   payItemNumber: string;
   payItemDescription: string;
   part: string;

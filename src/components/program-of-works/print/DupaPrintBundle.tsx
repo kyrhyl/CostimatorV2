@@ -10,7 +10,7 @@ interface DupaPrintBundleProps {
 
 export function DupaPrintBundle({ data, selectedItemKey, formatCurrency, formatNumber }: DupaPrintBundleProps) {
   const getItemKey = (item: DupaReportData['items'][number], index: number) =>
-    `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
+    item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
 
   const selectedIndex = selectedItemKey
     ? data.items.findIndex((item, index) => getItemKey(item, index) === selectedItemKey)

@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 import dbConnect from '@/lib/db/connect';
 import Project from '@/models/Project';
 import ProjectBOQ from '@/models/ProjectBOQ';
+import CostEstimate from '@/models/CostEstimate';
 import { normalizePart, PART_ORDER } from '@/lib/utils/dpwh-constants';
+import { ensureEstimateLineId, makeDupaItemId, normalizePowMode } from '@/lib/utils/dupa-identity';
 
 function getPartOrder(part: string): number {
   const key = part.replace('PART ', '').trim();
@@ -16,7 +18,7 @@ function comparePayItemNumbers(a: string, b: string): number {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -32,11 +34,69 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
 
-    const boqItems = await ProjectBOQ.find({ projectId: id }).lean();
+    const { searchParams } = new URL(req.url);
+    const mode = normalizePowMode(searchParams.get('mode'));
+    const estimateId = String(searchParams.get('estimateId') || '').trim();
 
-    const items = boqItems
+    let sourceItems: any[] = [];
+
+    if (mode === 'takeoff') {
+      let estimate: any = null;
+      if (estimateId && mongoose.Types.ObjectId.isValid(estimateId)) {
+        estimate = await CostEstimate.findOne({ _id: estimateId, projectId: id }).lean();
+      }
+      if (!estimate) {
+        estimate = await CostEstimate.findOne({ projectId: id }).sort({ createdAt: -1 }).lean();
+      }
+      const estimateLines = Array.isArray(estimate?.estimateLines) ? estimate.estimateLines : [];
+      sourceItems = estimateLines.map((line: any, index: number) => ({
+        sourceType: 'estimateLine' as const,
+        sourceId: ensureEstimateLineId(line, index),
+        payItemNumber: line.payItemNumber || '',
+        payItemDescription: line.payItemDescription || '',
+        part: normalizePart(line.part || 'PART C'),
+        unitOfMeasurement: line.unit || '',
+        outputPerHour: 1,
+        quantity: line.quantity || 0,
+        laborItems: line.laborItems || [],
+        equipmentItems: line.equipmentItems || [],
+        materialItems: line.materialItems || [],
+        ocmPercentage: estimate?.ocmPercentage || 0,
+        cpPercentage: estimate?.cpPercentage || 0,
+        vatPercentage: estimate?.vatPercentage || 0,
+      }));
+    } else {
+      const boqItems = await ProjectBOQ.find({ projectId: id }).lean();
+      sourceItems = boqItems.map((item: any) => ({
+        sourceType: 'projectBoq' as const,
+        sourceId: String(item?._id || ''),
+        payItemNumber: item.payItemNumber || '',
+        payItemDescription: item.payItemDescription || '',
+        part: normalizePart(item.part || 'PART C'),
+        unitOfMeasurement: item.unitOfMeasurement || '',
+        outputPerHour: item.outputPerHour || 1,
+        quantity: item.quantity || 0,
+        laborItems: item.laborItems || [],
+        equipmentItems: item.equipmentItems || [],
+        materialItems: item.materialItems || [],
+        ocmPercentage: item.ocmPercentage || 0,
+        cpPercentage: item.cpPercentage || 0,
+        vatPercentage: item.vatPercentage || 0,
+        ocmCost: item.ocmCost || 0,
+        cpCost: item.cpCost || 0,
+        vatCost: item.vatCost || 0,
+        totalCost: item.totalCost || 0,
+      }));
+    }
+
+    const items = sourceItems
       .map((item) => {
         const part = normalizePart(item.part || 'PART C');
+        const dupaItemId = makeDupaItemId({
+          sourceType: item.sourceType,
+          sourceId: item.sourceId,
+          payItemNumber: item.payItemNumber,
+        });
         const laborSubmitted = (item.laborItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const equipmentSubmitted = (item.equipmentItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const directCostSubmitted = laborSubmitted + equipmentSubmitted;
@@ -44,12 +104,22 @@ export async function GET(
         const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
         const materialsSubmitted = (item.materialItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
-        const ocmValue = item.ocmCost || 0;
-        const cpValue = item.cpCost || 0;
-        const vatValue = item.vatCost || 0;
+        const ocmValue = typeof item.ocmCost === 'number'
+          ? item.ocmCost
+          : directUnitPlusMaterialsSubmitted * (Number(item.ocmPercentage || 0) / 100);
+        const cpValue = typeof item.cpCost === 'number'
+          ? item.cpCost
+          : directUnitPlusMaterialsSubmitted * (Number(item.cpPercentage || 0) / 100);
+        const vatValue = typeof item.vatCost === 'number'
+          ? item.vatCost
+          : (directUnitPlusMaterialsSubmitted + ocmValue + cpValue) * (Number(item.vatPercentage || 0) / 100);
         const totalUnitCostSubmitted = item.totalCost || (directUnitPlusMaterialsSubmitted + ocmValue + cpValue + vatValue);
 
         return {
+          dupaItemId,
+          sourceType: item.sourceType,
+          sourceId: item.sourceId,
+          estimateLineId: item.sourceType === 'estimateLine' ? item.sourceId : undefined,
           payItemNumber: item.payItemNumber || '',
           payItemDescription: item.payItemDescription || '',
           part,
@@ -85,11 +155,11 @@ export async function GET(
             directUnitCostSubmitted,
             materialsSubmitted,
             directUnitPlusMaterialsSubmitted,
-            ocmPercent: item.ocmPercentage || 0,
+            ocmPercent: Number(item.ocmPercentage || 0),
             ocmValue,
-            cpPercent: item.cpPercentage || 0,
+            cpPercent: Number(item.cpPercentage || 0),
             cpValue,
-            vatPercent: item.vatPercentage || 0,
+            vatPercent: Number(item.vatPercentage || 0),
             vatValue,
             totalUnitCostSubmitted,
           },

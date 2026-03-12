@@ -47,6 +47,11 @@ export interface IDupaAdjustment extends Document {
   projectId: mongoose.Types.ObjectId;
   estimateRef: string;
   itemKey: string;
+  dupaItemId?: string;
+  sourceType?: 'projectBoq' | 'estimateLine';
+  sourceId?: string;
+  migrationVersion?: number;
+  baseSnapshot?: Record<string, any>;
   payItemNumber: string;
   payItemDescription: string;
   part: string;
@@ -123,6 +128,11 @@ const DupaAdjustmentSchema = new Schema<IDupaAdjustment>(
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     estimateRef: { type: String, required: true, index: true },
     itemKey: { type: String, required: true },
+    dupaItemId: { type: String, default: '', index: true },
+    sourceType: { type: String, enum: ['projectBoq', 'estimateLine'], default: undefined },
+    sourceId: { type: String, default: '' },
+    migrationVersion: { type: Number, default: 0 },
+    baseSnapshot: { type: Schema.Types.Mixed, default: null },
     payItemNumber: { type: String, required: true },
     payItemDescription: { type: String, required: true },
     part: { type: String, required: true },
@@ -140,6 +150,7 @@ const DupaAdjustmentSchema = new Schema<IDupaAdjustment>(
 );
 
 DupaAdjustmentSchema.index({ projectId: 1, estimateRef: 1, itemKey: 1 }, { unique: true });
+DupaAdjustmentSchema.index({ projectId: 1, estimateRef: 1, dupaItemId: 1 });
 
 const DupaAdjustment: Model<IDupaAdjustment> =
   mongoose.models.DupaAdjustment || mongoose.model<IDupaAdjustment>('DupaAdjustment', DupaAdjustmentSchema);

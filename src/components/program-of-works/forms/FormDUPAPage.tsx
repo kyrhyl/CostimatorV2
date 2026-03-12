@@ -8,9 +8,45 @@ interface FormDUPAPageProps {
   pageNumber: string;
   formatCurrency: (value: number) => string;
   formatNumber: (value: number) => string;
+  editable?: boolean;
+  laborSuggestions?: string[];
+  equipmentSuggestions?: string[];
+  materialSuggestions?: string[];
+  onLaborFieldChange?: (index: number, field: 'designation' | 'noOfPersons' | 'noOfHours' | 'hourlyRate', value: string | number) => void;
+  onEquipmentFieldChange?: (index: number, field: 'description' | 'noOfUnits' | 'noOfHours' | 'hourlyRate', value: string | number) => void;
+  onMaterialFieldChange?: (index: number, field: 'description' | 'unit' | 'quantity' | 'unitCost', value: string | number) => void;
+  onAddLaborRow?: () => void;
+  onAddEquipmentRow?: () => void;
+  onAddMaterialRow?: () => void;
+  onRemoveLaborRow?: (index: number) => void;
+  onRemoveEquipmentRow?: (index: number) => void;
+  onRemoveMaterialRow?: (index: number) => void;
 }
 
-export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatNumber }: FormDUPAPageProps) {
+function toInputNumber(value: number): string {
+  return Number.isFinite(value) ? String(value) : '0';
+}
+
+export function FormDUPAPage({
+  report,
+  item,
+  pageNumber,
+  formatCurrency,
+  formatNumber,
+  editable = false,
+  laborSuggestions = [],
+  equipmentSuggestions = [],
+  materialSuggestions = [],
+  onLaborFieldChange,
+  onEquipmentFieldChange,
+  onMaterialFieldChange,
+  onAddLaborRow,
+  onAddEquipmentRow,
+  onAddMaterialRow,
+  onRemoveLaborRow,
+  onRemoveEquipmentRow,
+  onRemoveMaterialRow,
+}: FormDUPAPageProps) {
   const laborRows = item.laborItems.length > 0 ? item.laborItems : [{ designation: 'None', noOfPersons: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }];
   const equipmentRows = item.equipmentItems.length > 0 ? item.equipmentItems : [{ description: 'None', noOfUnits: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }];
   const materialRows = item.materialItems.length > 0 ? item.materialItems : [{ description: 'None', unit: '-', quantity: 0, unitCost: 0, amount: 0 }];
@@ -21,6 +57,8 @@ export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatN
     `${row.description}-${row.noOfUnits}-${row.noOfHours}-${row.hourlyRate}-${index}`;
   const getMaterialRowKey = (row: (typeof materialRows)[number], index: number) =>
     `${row.description}-${row.unit}-${row.quantity}-${row.unitCost}-${index}`;
+
+  const inputClass = 'w-full rounded border border-slate-300 bg-white px-1 py-[1px] text-[0.66rem] leading-tight';
 
   return (
     <A4PageWrapper pageNumber={pageNumber} orientation="portrait">
@@ -40,6 +78,22 @@ export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatN
         <div><span className="font-semibold">Output per hour - As Submitted:</span> {formatNumber(item.outputPerHour)}</div>
       </div>
 
+      <datalist id="dupa-labor-suggestions">
+        {laborSuggestions.map((label, index) => (
+          <option key={`${label}-${index}`} value={label} />
+        ))}
+      </datalist>
+      <datalist id="dupa-equipment-suggestions">
+        {equipmentSuggestions.map((label, index) => (
+          <option key={`${label}-${index}`} value={label} />
+        ))}
+      </datalist>
+      <datalist id="dupa-material-suggestions">
+        {materialSuggestions.map((label, index) => (
+          <option key={`${label}-${index}`} value={label} />
+        ))}
+      </datalist>
+
       <table className="w-full border-collapse text-[0.7rem] leading-tight">
         <thead>
           <tr className="bg-[#333] text-white"><th className="px-1 py-1 text-left" style={{ border: '1px solid #000' }} colSpan={6}>LABOR</th></tr>
@@ -56,13 +110,47 @@ export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatN
           {laborRows.map((row, idx) => (
             <tr key={getLaborRowKey(row, idx)}>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{idx === 0 ? 'A.1' : ''}</td>
-              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{row.designation}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.noOfPersons > 0 ? formatNumber(row.noOfPersons) : '-'}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-'}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-'}</td>
+              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <div>
+                    <input
+                      list="dupa-labor-suggestions"
+                      className={inputClass}
+                      value={row.designation}
+                      onChange={(e) => onLaborFieldChange?.(idx, 'designation', e.target.value)}
+                    />
+                    {laborRows.length > 1 && (
+                      <button type="button" className="mt-[1px] text-[10px] text-red-600" onClick={() => onRemoveLaborRow?.(idx)}>Remove</button>
+                    )}
+                  </div>
+                ) : row.designation}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.noOfPersons)} onChange={(e) => onLaborFieldChange?.(idx, 'noOfPersons', Number(e.target.value || 0))} />
+                ) : (row.noOfPersons > 0 ? formatNumber(row.noOfPersons) : '-')}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.noOfHours)} onChange={(e) => onLaborFieldChange?.(idx, 'noOfHours', Number(e.target.value || 0))} />
+                ) : (row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-')}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.hourlyRate)} onChange={(e) => onLaborFieldChange?.(idx, 'hourlyRate', Number(e.target.value || 0))} />
+                ) : (row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-')}
+              </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.amount > 0 ? formatCurrency(row.amount) : '-'}</td>
             </tr>
           ))}
+          {editable && (
+            <tr>
+              <td style={{ border: '1px solid #000' }}></td>
+              <td colSpan={5} className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>
+                <button type="button" className="text-[11px] font-semibold text-blue-700" onClick={onAddLaborRow}>+ Add labor row</button>
+              </td>
+            </tr>
+          )}
           <tr className="font-semibold"><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={5}>Sub - Total for A.1 - As Submitted</td><td className="px-1 py-[2px] text-right" style={{ border: '1px solid #000' }}>{formatCurrency(item.totals.laborSubmitted)}</td></tr>
           <tr><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>A.2</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={4}>Sub - Total for A.2 - As Evaluated</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}></td></tr>
 
@@ -70,13 +158,47 @@ export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatN
           {equipmentRows.map((row, idx) => (
             <tr key={getEquipmentRowKey(row, idx)}>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{idx === 0 ? 'B.1' : ''}</td>
-              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{row.description}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.noOfUnits > 0 ? formatNumber(row.noOfUnits) : '-'}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-'}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-'}</td>
+              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <div>
+                    <input
+                      list="dupa-equipment-suggestions"
+                      className={inputClass}
+                      value={row.description}
+                      onChange={(e) => onEquipmentFieldChange?.(idx, 'description', e.target.value)}
+                    />
+                    {equipmentRows.length > 1 && (
+                      <button type="button" className="mt-[1px] text-[10px] text-red-600" onClick={() => onRemoveEquipmentRow?.(idx)}>Remove</button>
+                    )}
+                  </div>
+                ) : row.description}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.noOfUnits)} onChange={(e) => onEquipmentFieldChange?.(idx, 'noOfUnits', Number(e.target.value || 0))} />
+                ) : (row.noOfUnits > 0 ? formatNumber(row.noOfUnits) : '-')}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.noOfHours)} onChange={(e) => onEquipmentFieldChange?.(idx, 'noOfHours', Number(e.target.value || 0))} />
+                ) : (row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-')}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.hourlyRate)} onChange={(e) => onEquipmentFieldChange?.(idx, 'hourlyRate', Number(e.target.value || 0))} />
+                ) : (row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-')}
+              </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.amount > 0 ? formatCurrency(row.amount) : '-'}</td>
             </tr>
           ))}
+          {editable && (
+            <tr>
+              <td style={{ border: '1px solid #000' }}></td>
+              <td colSpan={5} className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>
+                <button type="button" className="text-[11px] font-semibold text-blue-700" onClick={onAddEquipmentRow}>+ Add equipment row</button>
+              </td>
+            </tr>
+          )}
           <tr className="font-semibold"><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={5}>Sub - Total for B.1 - As Submitted</td><td className="px-1 py-[2px] text-right" style={{ border: '1px solid #000' }}>{formatCurrency(item.totals.equipmentSubmitted)}</td></tr>
           <tr><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>B.2</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={4}>Sub - Total for B.2 - As Evaluated</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}></td></tr>
 
@@ -91,13 +213,47 @@ export function FormDUPAPage({ report, item, pageNumber, formatCurrency, formatN
           {materialRows.map((row, idx) => (
             <tr key={getMaterialRowKey(row, idx)}>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{idx === 0 ? 'F.1' : ''}</td>
-              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{row.description}</td>
-              <td className="px-1 py-[1px] text-center" style={{ border: '1px solid #000' }}>{row.unit}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.quantity > 0 ? formatNumber(row.quantity) : '-'}</td>
-              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.unitCost > 0 ? formatCurrency(row.unitCost) : '-'}</td>
+              <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <div>
+                    <input
+                      list="dupa-material-suggestions"
+                      className={inputClass}
+                      value={row.description}
+                      onChange={(e) => onMaterialFieldChange?.(idx, 'description', e.target.value)}
+                    />
+                    {materialRows.length > 1 && (
+                      <button type="button" className="mt-[1px] text-[10px] text-red-600" onClick={() => onRemoveMaterialRow?.(idx)}>Remove</button>
+                    )}
+                  </div>
+                ) : row.description}
+              </td>
+              <td className="px-1 py-[1px] text-center" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} value={row.unit} onChange={(e) => onMaterialFieldChange?.(idx, 'unit', e.target.value)} />
+                ) : row.unit}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.quantity)} onChange={(e) => onMaterialFieldChange?.(idx, 'quantity', Number(e.target.value || 0))} />
+                ) : (row.quantity > 0 ? formatNumber(row.quantity) : '-')}
+              </td>
+              <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
+                {editable ? (
+                  <input className={inputClass} type="number" value={toInputNumber(row.unitCost)} onChange={(e) => onMaterialFieldChange?.(idx, 'unitCost', Number(e.target.value || 0))} />
+                ) : (row.unitCost > 0 ? formatCurrency(row.unitCost) : '-')}
+              </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.amount > 0 ? formatCurrency(row.amount) : '-'}</td>
             </tr>
           ))}
+          {editable && (
+            <tr>
+              <td style={{ border: '1px solid #000' }}></td>
+              <td colSpan={5} className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>
+                <button type="button" className="text-[11px] font-semibold text-blue-700" onClick={onAddMaterialRow}>+ Add material row</button>
+              </td>
+            </tr>
+          )}
           <tr className="font-semibold"><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={5}>Sub - Total for F.1 - As Submitted</td><td className="px-1 py-[2px] text-right" style={{ border: '1px solid #000' }}>{formatCurrency(item.totals.materialsSubmitted)}</td></tr>
           <tr><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}>F.2</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }} colSpan={4}>Sub - Total for F.2 - As Evaluated</td><td className="px-1 py-[2px]" style={{ border: '1px solid #000' }}></td></tr>
 

@@ -5,22 +5,20 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProjectDetailsCard from '@/components/program-of-works/ProjectDetailsCard';
 import FinancialSummaryCard from '@/components/program-of-works/FinancialSummaryCard';
-import DescriptionOfWorksTable, { type WorksPart } from '@/components/program-of-works/DescriptionOfWorksTable';
 import EquipmentRequirements, { type Equipment } from '@/components/program-of-works/EquipmentRequirements';
-import BreakdownOfExpenditures, { type ExpenditureBreakdown } from '@/components/program-of-works/BreakdownOfExpenditures';
-import ProgramOfWorksKpiRow from '@/components/program-of-works/ProgramOfWorksKpiRow';
+import type { ExpenditureBreakdown } from '@/components/program-of-works/BreakdownOfExpenditures';
 import ProgramOfWorksItemizedTable from '@/components/program-of-works/ProgramOfWorksItemizedTable';
 import ProgramOfWorksApprovalStatus from '@/components/program-of-works/ProgramOfWorksApprovalStatus';
 import ProgramOfWorksRevisionHistory from '@/components/program-of-works/ProgramOfWorksRevisionHistory';
 import ProgramOfWorksHauling from '@/components/program-of-works/ProgramOfWorksHauling';
+import ProgramOfWorksOverviewSummary from '@/components/program-of-works/ProgramOfWorksOverviewSummary';
 import DigitalSignOffs, { type Signatory } from '@/components/program-of-works/DigitalSignOffs';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
 import ManualPowManager from '@/components/program-of-works/ManualPowManager';
-import { DupaTab } from '@/components/program-of-works/tabs/DupaTab';
+import { DupaWorkspaceTab } from '@/components/program-of-works/tabs/DupaWorkspaceTab';
 import type { ProjectBoqItem } from '@/components/program-of-works/manual-pow/types';
 import type { DupaReportData } from '@/types/dupa';
 import { derivePartLabel, normalizePart } from '@/lib/utils/dpwh-constants';
-import { computePercentOfProjectCost } from '@/lib/utils/pow-math';
 
 interface Project {
   _id: string;
@@ -82,6 +80,9 @@ interface PowAdjustment {
 
 interface DupaAdjustmentRecord {
   itemKey: string;
+  dupaItemId?: string;
+  sourceType?: 'projectBoq' | 'estimateLine';
+  sourceId?: string;
   payItemNumber: string;
   payItemDescription: string;
   part: string;
@@ -96,7 +97,7 @@ interface DupaAdjustmentRecord {
 
 const getLineKey = (line: any, index: number) => `${line?._id || line?.payItemNumber || 'line'}-${index}`;
 const getDupaItemKey = (item: DupaReportData['items'][number], index: number) =>
-  `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
+  item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
 
 const applyEstimateAdjustments = (estimate: any, adjustmentsByLineKey: Record<string, PowAdjustment>) => {
   if (!estimate?.estimateLines?.length) return estimate;
@@ -173,6 +174,7 @@ export default function ProgramOfWorksWorkspacePage() {
   const [manualBoqItems, setManualBoqItems] = useState<ProjectBoqItem[]>([]);
   const [loadingManualBoq, setLoadingManualBoq] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [compactTables, setCompactTables] = useState(true);
   const [activeSection, setActiveSection] = useState('overview');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
@@ -184,11 +186,13 @@ export default function ProgramOfWorksWorkspacePage() {
   const [versionNotFound, setVersionNotFound] = useState(false);
   const [powAdjustments, setPowAdjustments] = useState<Record<string, PowAdjustment>>({});
   const [adjustmentNotice, setAdjustmentNotice] = useState<string | null>(null);
+  const [prescribedBreakdown, setPrescribedBreakdown] = useState<{ eao?: number; eaoPercentage?: number } | null>(null);
   const estimateIdFromQuery = searchParams.get('estimateId');
   const viewFromQuery = searchParams.get('view');
   const sectionFromQuery = searchParams.get('section');
   const isManualPow = project?.powMode === 'manual';
   const isManualWorkspace = isManualPow && !(viewFromQuery === 'takeoff' && Boolean(estimateIdFromQuery));
+  const activeEstimateRef = selectedEstimateId || estimateIdFromQuery || '';
   const dupaEstimateRef = isManualWorkspace ? 'manual' : (selectedEstimateId || estimateIdFromQuery || '');
 
   useEffect(() => {
@@ -247,6 +251,18 @@ export default function ProgramOfWorksWorkspacePage() {
     if (!projectId) return;
     void loadPowAdjustments();
   }, [projectId, isManualWorkspace, selectedEstimateId, manualBoqItems.length]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    void loadPrescribedBreakdown();
+  }, [projectId, isManualWorkspace, selectedEstimateId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth < 1280) {
+      setIsSidebarCollapsed(true);
+    }
+  }, []);
 
   const fetchProject = async () => {
     try {
@@ -309,9 +325,12 @@ export default function ProgramOfWorksWorkspacePage() {
     }
   };
 
-  const loadManualBoq = async () => {
+  const loadManualBoq = async (options?: { silent?: boolean }) => {
     if (!projectId) return;
-    setLoadingManualBoq(true);
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoadingManualBoq(true);
+    }
     try {
       const res = await fetch(`/api/project-boq?projectId=${projectId}`);
       const data = await res.json();
@@ -321,17 +340,54 @@ export default function ProgramOfWorksWorkspacePage() {
     } catch (err) {
       console.error('Failed to load manual BOQ items:', err);
     } finally {
-      setLoadingManualBoq(false);
+      if (!silent) {
+        setLoadingManualBoq(false);
+      }
+    }
+  };
+
+  const loadPrescribedBreakdown = async () => {
+    try {
+      const params = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff' });
+      if (!isManualWorkspace && activeEstimateRef) {
+        params.set('estimateId', activeEstimateRef);
+      }
+      const res = await fetch(`/api/projects/${projectId}/pow-report?${params.toString()}`);
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        setPrescribedBreakdown({
+          eao: Number(data?.data?.breakdown?.eao || 0),
+          eaoPercentage: Number(data?.data?.breakdown?.eaoPercentage || 0),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load prescribed POW breakdown:', err);
     }
   };
 
   const handleSectionClick = (sectionId: string) => {
     setActiveSection(sectionId);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('section', sectionId);
+
+    if (isManualWorkspace) {
+      nextParams.delete('estimateId');
+      nextParams.delete('view');
+    } else if (selectedEstimateId) {
+      nextParams.set('estimateId', selectedEstimateId);
+      nextParams.set('view', 'takeoff');
+    }
+
+    router.replace(`/projects/${projectId}/program-of-works?${nextParams.toString()}`);
   };
 
-  const handlePartClick = (part: string) => {
-    setActiveSection('itemized-breakdown');
-    setItemSearch(part.replace('PART ', ''));
+  const handleEstimateChange = (estimateId: string) => {
+    setSelectedEstimateId(estimateId);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('estimateId', estimateId);
+    nextParams.set('view', 'takeoff');
+    nextParams.set('section', activeSection);
+    router.replace(`/projects/${projectId}/program-of-works?${nextParams.toString()}`);
   };
 
   const loadDupaReport = async () => {
@@ -339,8 +395,12 @@ export default function ProgramOfWorksWorkspacePage() {
     setDupaLoading(true);
     setDupaError(null);
     try {
+      const reportParams = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff' });
+      if (!isManualWorkspace && activeEstimateRef) {
+        reportParams.set('estimateId', activeEstimateRef);
+      }
       const [baseRes, adjustmentsRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}/dupa-report`),
+        fetch(`/api/projects/${projectId}/dupa-report?${reportParams.toString()}`),
         fetch(`/api/projects/${projectId}/dupa-adjustments?estimateRef=${encodeURIComponent(dupaEstimateRef || 'manual')}`),
       ]);
       const baseJson = await baseRes.json();
@@ -351,9 +411,19 @@ export default function ProgramOfWorksWorkspacePage() {
       }
 
       const adjustmentMap: Record<string, DupaAdjustmentRecord> = {};
+      const keyedAdjustments: Record<string, DupaAdjustmentRecord> = {};
       if (adjustmentsRes.ok && adjustmentsJson.success) {
         (adjustmentsJson.data || []).forEach((row: DupaAdjustmentRecord) => {
-          adjustmentMap[row.itemKey] = row;
+          const primaryKey = row.dupaItemId || row.itemKey;
+          if (primaryKey) {
+            keyedAdjustments[primaryKey] = row;
+          }
+          if (row.itemKey) {
+            adjustmentMap[row.itemKey] = row;
+          }
+          if (row.dupaItemId) {
+            adjustmentMap[row.dupaItemId] = row;
+          }
         });
       }
 
@@ -371,7 +441,7 @@ export default function ProgramOfWorksWorkspacePage() {
         };
       });
 
-      setDupaAdjustments(adjustmentMap);
+      setDupaAdjustments(keyedAdjustments);
       setDupaData({ ...baseData, items: mergedItems });
     } catch (err: any) {
       setDupaError(err.message || 'Failed to load DUPA report');
@@ -384,7 +454,11 @@ export default function ProgramOfWorksWorkspacePage() {
 
   const handleExportPDF = () => {
     if (projectId) {
-      window.open(`/projects/${projectId}/pow-report`, '_blank');
+      const params = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff' });
+      if (!isManualWorkspace && activeEstimateRef) {
+        params.set('estimateId', activeEstimateRef);
+      }
+      window.open(`/projects/${projectId}/pow-report?${params.toString()}`, '_blank');
     }
   };
 
@@ -459,55 +533,15 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
   };
 };
 
-  const transformToWorksParts = (estimate: any): WorksPart[] => {
-    const lines = estimate?.estimateLines || [];
-    if (!lines.length) return [];
-
-    const partMap = new Map<string, { asSubmitted: number; asEvaluated: number; items: number }>();
-
-    lines.forEach((item: any) => {
-      const partKey = normalizePart(item.part);
-
-      if (!partMap.has(partKey)) {
-        partMap.set(partKey, { asSubmitted: 0, asEvaluated: 0, items: 0 });
-      }
-
-      const partData = partMap.get(partKey)!;
-      partData.asSubmitted += item.totalAmount || 0;
-      partData.asEvaluated += item.totalAmount || 0;
-      partData.items += 1;
-    });
-
-    const partDescriptions: Record<string, string> = {
-      'PART A': 'Facilities for the Engineer',
-      'PART B': 'Other General Requirements',
-      'PART C': 'Earthworks',
-      'PART D': 'Subbase and Base Course',
-      'PART E': 'Surface Courses',
-      'PART F': 'Buildings and Structures',
-      'PART G': 'Minor Structures',
-    };
-
-    const totalProjectCost = estimate?.costSummary?.grandTotal || 0;
-
-    return Array.from(partMap.entries()).map(([part, data]) => ({
-      part,
-      description: partDescriptions[part] || 'Other Works',
-      asSubmitted: data.asSubmitted,
-      asEvaluated: data.asEvaluated,
-      percent: computePercentOfProjectCost(data.asSubmitted, totalProjectCost),
-    }));
-  };
-
   const loadPowAdjustments = async () => {
     try {
-      if (!isManualWorkspace && !selectedEstimateId) {
+      if (!isManualWorkspace && !activeEstimateRef) {
         setPowAdjustments({});
         return;
       }
       const params = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff' });
-      if (!isManualWorkspace && selectedEstimateId) {
-        params.set('estimateId', selectedEstimateId);
+      if (!isManualWorkspace && activeEstimateRef) {
+        params.set('estimateId', activeEstimateRef);
       }
       const res = await fetch(`/api/projects/${projectId}/pow-adjustments?${params.toString()}`);
       const data = await res.json();
@@ -536,7 +570,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
   }) => {
     const payload = {
       mode: isManualWorkspace ? 'manual' : 'takeoff',
-      estimateId: isManualWorkspace ? undefined : selectedEstimateId,
+      estimateId: isManualWorkspace ? undefined : activeEstimateRef,
       ...input,
     };
 
@@ -556,8 +590,8 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
   const clearPowAdjustment = async (lineKey: string) => {
     const params = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff', lineKey });
-    if (!isManualWorkspace && selectedEstimateId) {
-      params.set('estimateId', selectedEstimateId);
+    if (!isManualWorkspace && activeEstimateRef) {
+      params.set('estimateId', activeEstimateRef);
     }
     const res = await fetch(`/api/projects/${projectId}/pow-adjustments?${params.toString()}`, {
       method: 'DELETE',
@@ -576,68 +610,65 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
   };
 
   const saveDupaAdjustment = async (itemKey: string, item: DupaReportData['items'][number]) => {
-    const estimateRef = dupaEstimateRef || 'manual';
-    const payload = {
-      estimateRef,
-      itemKey,
-      payItemNumber: item.payItemNumber,
-      payItemDescription: item.payItemDescription,
-      part: item.part,
-      unitOfMeasurement: item.unitOfMeasurement,
-      outputPerHour: item.outputPerHour,
-      quantity: item.quantity,
-      laborItems: item.laborItems,
-      equipmentItems: item.equipmentItems,
-      materialItems: item.materialItems,
-      totals: item.totals,
-    };
-
-    const res = await fetch(`/api/projects/${projectId}/dupa-adjustments`, {
+    const effectiveKey = item.dupaItemId || itemKey;
+    const res = await fetch(`/api/projects/${projectId}/dupa-items/${encodeURIComponent(effectiveKey)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        mode: isManualWorkspace ? 'manual' : 'takeoff',
+        estimateId: isManualWorkspace ? undefined : activeEstimateRef,
+        itemKey,
+        dupaItemId: effectiveKey,
+        sourceType: item.sourceType,
+        sourceId: item.sourceId,
+        item,
+      }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Failed to save DUPA adjustment');
     }
 
-    setDupaAdjustments((prev) => ({ ...prev, [itemKey]: payload as DupaAdjustmentRecord }));
-    setDupaData((prev) => {
-      if (!prev) return prev;
-      const merged = prev.items.map((entry, index) => (getDupaItemKey(entry, index) === itemKey ? item : entry));
-      return { ...prev, items: merged };
-    });
+    await Promise.all([
+      loadDupaReport(),
+      isManualWorkspace ? loadManualBoq({ silent: true }) : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve()),
+      loadPowAdjustments(),
+      loadPrescribedBreakdown(),
+    ]);
 
-    const matchedLine = (activeEstimate?.estimateLines || []).find(
-      (line: any) => String(line.payItemNumber || '') === String(item.payItemNumber || ''),
-    );
-    if (matchedLine) {
-      await savePowAdjustment({
-        lineKey: matchedLine.lineKey || getLineKey(matchedLine, 0),
-        payItemNumber: String(matchedLine.payItemNumber || ''),
-        quantity: Number(matchedLine.quantity || 0),
-        unitCost: Number(item.totals.totalUnitCostSubmitted || 0),
-        reason: 'DUPA adjustment',
-      });
-    }
+    setAdjustmentNotice('DUPA changes saved to canonical values.');
+    window.setTimeout(() => setAdjustmentNotice(null), 2200);
   };
 
   const resetDupaAdjustment = async (itemKey: string) => {
-    const estimateRef = dupaEstimateRef || 'manual';
-    const params = new URLSearchParams({ estimateRef, itemKey });
-    const res = await fetch(`/api/projects/${projectId}/dupa-adjustments?${params.toString()}`, { method: 'DELETE' });
+    const item = (dupaData?.items || []).find((entry, index) => getDupaItemKey(entry, index) === itemKey);
+    if (!item) {
+      throw new Error('Selected DUPA item was not found');
+    }
+    const effectiveKey = item.dupaItemId || itemKey;
+    const params = new URLSearchParams({
+      mode: isManualWorkspace ? 'manual' : 'takeoff',
+      sourceType: item.sourceType || 'projectBoq',
+      sourceId: String(item.sourceId || ''),
+    });
+    if (!isManualWorkspace && activeEstimateRef) {
+      params.set('estimateId', activeEstimateRef);
+    }
+
+    const res = await fetch(`/api/projects/${projectId}/dupa-items/${encodeURIComponent(effectiveKey)}?${params.toString()}`, {
+      method: 'DELETE',
+    });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Failed to reset DUPA adjustment');
     }
 
-    setDupaAdjustments((prev) => {
-      const next = { ...prev };
-      delete next[itemKey];
-      return next;
-    });
-    await loadDupaReport();
+    await Promise.all([
+      loadDupaReport(),
+      isManualWorkspace ? loadManualBoq({ silent: true }) : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve()),
+      loadPowAdjustments(),
+      loadPrescribedBreakdown(),
+    ]);
   };
 
   const transformToEquipment = (estimate: any): Equipment[] => {
@@ -675,7 +706,14 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     };
   };
 
-  const reportLink = projectId ? `/projects/${projectId}/pow-report` : undefined;
+  const reportLink = useMemo(() => {
+    if (!projectId) return undefined;
+    const params = new URLSearchParams({ mode: isManualWorkspace ? 'manual' : 'takeoff' });
+    if (!isManualWorkspace && activeEstimateRef) {
+      params.set('estimateId', activeEstimateRef);
+    }
+    return `/projects/${projectId}/pow-report?${params.toString()}`;
+  }, [projectId, isManualWorkspace, activeEstimateRef]);
   const manualEstimate = useMemo(() => (manualBoqItems.length ? buildManualEstimate(manualBoqItems) : null), [manualBoqItems]);
   const activeEstimateBase = isManualWorkspace ? manualEstimate : selectedEstimate;
   const activeEstimate = useMemo(
@@ -683,7 +721,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     [activeEstimateBase, powAdjustments],
   );
 
-  const worksParts = useMemo(() => (activeEstimate ? transformToWorksParts(activeEstimate) : []), [activeEstimate]);
   const equipment = useMemo(() => (activeEstimate ? transformToEquipment(activeEstimate) : []), [activeEstimate]);
   const expenditureBreakdown = useMemo(
     () => (activeEstimate ? transformToExpenditure(activeEstimate) : {
@@ -813,15 +850,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
         )
       },
       {
-        id: 'description',
-        label: 'Description of Works',
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m-6-8h6m2 10H7a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V18a2 2 0 01-2 2z" />
-          </svg>
-        )
-      },
-      {
         id: 'dupa-analysis',
         label: 'Detailed Unit Price Analysis',
         icon: (
@@ -836,15 +864,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l6-6 4 4 8-8M3 17h4m10 0h4" />
-          </svg>
-        )
-      },
-      {
-        id: 'expenditures',
-        label: 'Expenditure Breakdown',
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
           </svg>
         )
       },
@@ -888,7 +907,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       {
         key: 'analysis',
         label: 'ANALYSIS',
-        items: sections.filter((section) => ['description', 'dupa-analysis', 'hauling', 'equipment', 'expenditures'].includes(section.id)),
+        items: sections.filter((section) => ['dupa-analysis', 'hauling', 'equipment'].includes(section.id)),
       },
       {
         key: 'governance',
@@ -898,6 +917,17 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     ],
     [sections, isManualWorkspace],
   );
+
+  const activeSectionConfig = useMemo(
+    () => sections.find((section) => section.id === activeSection),
+    [sections, activeSection],
+  );
+
+  const fundSourceLabel = useMemo(() => {
+    const fund = project?.fundSource;
+    if (!fund) return '-';
+    return [fund.fundingOrganization, fund.fundingAgreement, fund.projectId].filter(Boolean).join(' | ') || '-';
+  }, [project?.fundSource]);
 
   if (loadingProject) {
     return (
@@ -911,8 +941,8 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     <div className="min-h-screen bg-gray-50">
       <div className="flex min-h-screen">
         {/* Sidebar */}
-        <aside className={`bg-white border-r border-gray-200 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-64'} flex flex-col flex-shrink-0`}>
-          <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
+        <aside className={`bg-white border-r border-gray-200 transition-all duration-300 ${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0`}>
+          <div className="h-12 border-b border-gray-200 flex items-center justify-between px-3 flex-shrink-0">
             {!isSidebarCollapsed && (
               <div className="text-sm font-semibold text-gray-900">Program of Works</div>
             )}
@@ -927,26 +957,26 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
             </button>
           </div>
 
-          <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-2 space-y-1.5 overflow-y-auto">
             {sectionGroups.map((group) => (
               <div key={group.key}>
                 {!isSidebarCollapsed && (
-                  <div className="text-[11px] font-semibold text-gray-400 mb-1 px-2 tracking-wide">{group.label}</div>
+                  <div className="text-[11px] font-semibold text-gray-400 mb-1 px-2.5 tracking-wide text-left">{group.label}</div>
                 )}
                 <div className="space-y-1">
                   {group.items.map((section) => (
                     <button
                       key={section.id}
                       onClick={() => handleSectionClick(section.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                      className={`w-full flex items-center justify-start gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left ${
                         activeSection === section.id
                           ? 'bg-dpwh-blue-100 text-dpwh-blue-800'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`}
                       title={section.label}
                     >
-                      {section.icon}
-                      {!isSidebarCollapsed && <span className="text-sm font-medium">{section.label}</span>}
+                      <span className="w-5 shrink-0">{section.icon}</span>
+                      {!isSidebarCollapsed && <span className="flex-1 text-left text-sm font-medium leading-tight">{section.label}</span>}
                     </button>
                   ))}
                 </div>
@@ -961,7 +991,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                   isSidebarCollapsed
                     ? 'justify-center bg-dpwh-green-50 text-dpwh-green-700 hover:bg-dpwh-green-100'
-                    : 'bg-dpwh-green-600 text-white hover:bg-dpwh-green-700'
+                    : 'justify-start text-left bg-dpwh-green-600 text-white hover:bg-dpwh-green-700'
                 }`}
                 title="New Program of Works"
               >
@@ -976,38 +1006,60 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200 px-6 py-4 flex flex-wrap gap-4 items-center justify-between">
+          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200 px-4 py-2 flex flex-wrap gap-2 items-center justify-between">
             <div>
-              <Link href={`/projects/${projectId}?tab=estimates`} className="text-sm text-blue-600 hover:text-blue-800">
-                ← Back to Project Details
+              <Link
+                href={`/projects/${projectId}?tab=estimates`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+              >
+                <span aria-hidden>←</span>
+                <span>Back to Project Details</span>
               </Link>
-              <h1 className="text-xl font-bold text-gray-900 mt-1">{project?.projectName || 'Program of Works'}</h1>
-              <p className="text-sm text-gray-600">{project?.projectLocation || 'Location not specified'}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className={`px-2 py-1 rounded-full font-semibold ${isManualWorkspace ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {isManualWorkspace ? 'Manual Mode' : 'Takeoff Mode'}
+              <h1 className="text-lg font-bold text-gray-900 mt-1">{project?.projectName || 'Program of Works'}</h1>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {project?.projectLocation || 'Location not specified'}
+                <span className="mx-1.5 text-gray-400">•</span>
+                Active Section: {activeSectionConfig?.label || 'Overview'}
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className={`px-2 py-0.5 rounded-full font-semibold ${isManualWorkspace ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {isManualWorkspace ? 'Manual Workspace' : 'Takeoff Workspace'}
                 </span>
                 {activeEstimate?.estimateName && (
-                  <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                  <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
                     {activeEstimate.estimateName}
                   </span>
                 )}
-                <span className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
                   {formatCurrency(activeEstimate?.costSummary?.grandTotal || 0)}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {!isManualWorkspace && estimates.length > 0 && (
+                <select
+                  value={selectedEstimateId || ''}
+                  onChange={(e) => handleEstimateChange(e.target.value)}
+                  className="max-w-[18rem] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                  title="Switch active estimate"
+                >
+                  {estimates.map((estimate) => (
+                    <option key={estimate._id} value={estimate._id}>
+                      {estimate.estimateName || estimate.name || estimate.estimateNumber || 'Untitled'}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
-                onClick={() => setActiveSection('reports')}
+                onClick={() => handleSectionClick('reports')}
                 className="inline-flex items-center gap-2 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-50"
               >
                 Reports
               </button>
               <button
                 type="button"
-                onClick={() => setActiveSection('dupa-analysis')}
+                onClick={() => handleSectionClick('dupa-analysis')}
                 className="inline-flex items-center gap-2 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-50"
               >
                 DUPA Analysis
@@ -1026,25 +1078,12 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-4">
             {adjustmentNotice && (
               <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
                 {adjustmentNotice}
               </div>
             )}
-            {project && (
-              <div className="mb-3 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-                <p className="text-xs font-semibold text-blue-900">
-                  Program of Works Mode: {isManualWorkspace ? 'Manual BOQ Input' : 'Takeoff Linked'}
-                </p>
-                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  isManualWorkspace ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {isManualWorkspace ? 'Manual Workspace' : 'Takeoff Workspace'}
-                </span>
-              </div>
-            )}
-
             {versionNotFound && !isManualWorkspace && (
               <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm font-semibold text-amber-800">Selected version was not found.</p>
@@ -1120,33 +1159,35 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 )}
 
                 {activeSection === 'overview' && (
-                  <div className="space-y-6">
-                    <ProgramOfWorksKpiRow
+                  <div className="space-y-4">
+                    <ProgramOfWorksOverviewSummary
+                      projectName={project?.projectName || 'Program of Works'}
+                      projectLocation={project?.projectLocation || '-'}
+                      implementingOffice={project?.implementingOffice || '-'}
+                      district={project?.district || '-'}
+                      appropriation={project?.appropriation || 0}
+                      fundSourceLabel={fundSourceLabel}
+                      startDate={project?.startDate}
+                      endDate={project?.endDate}
+                      workableDays={project?.workableDays}
+                      unworkableDays={project?.unworkableDays}
+                      totalDuration={project?.totalDuration}
                       totalProjectCost={activeEstimate?.costSummary?.grandTotal || 0}
-                      directCost={activeEstimate?.costSummary?.totalDirectCost || 0}
-                      activeComponents={itemizedGroups.groups.length}
+                      partSummaries={itemizedGroups.groups.map((group) => ({
+                        part: group.part,
+                        description: group.description,
+                        totalAmount: group.items.reduce((sum: number, item: any) => sum + Number(item.directCost || 0), 0),
+                      }))}
+                      equipment={equipment}
+                      expenditureBreakdown={expenditureBreakdown}
+                      prescribedEao={prescribedBreakdown?.eao}
+                      prescribedEaoPercentage={prescribedBreakdown?.eaoPercentage}
+                      onOpenItemized={() => handleSectionClick('itemized-breakdown')}
+                      onOpenDupa={() => handleSectionClick('dupa-analysis')}
+                      reportLink={reportLink}
                     />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setActiveSection('itemized-breakdown')}
-                        className="text-left rounded-lg border border-blue-200 bg-blue-50 p-4 hover:bg-blue-100 transition"
-                      >
-                        <p className="text-sm font-semibold text-blue-900">Open Itemized Cost Breakdown</p>
-                        <p className="text-xs text-blue-700 mt-1">Review, search, and adjust line-item costs.</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveSection('dupa-analysis')}
-                        className="text-left rounded-lg border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100 transition"
-                      >
-                        <p className="text-sm font-semibold text-emerald-900">Open Detailed Unit Price Analysis</p>
-                        <p className="text-xs text-emerald-700 mt-1">View DUPA sheets in print-style screen format.</p>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <ProgramOfWorksApprovalStatus
                         status={activeEstimate?.status}
                         preparedBy={activeEstimate?.preparedBy}
@@ -1160,17 +1201,23 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 )}
 
                 {activeSection === 'itemized-breakdown' && (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                          <p className="text-xs text-gray-500 mb-2">Projects / Budgeting / Itemized Breakdown</p>
-                          <h2 className="text-2xl font-bold text-gray-900">Itemized Cost Breakdown</h2>
+                          <h2 className="text-xl font-bold text-gray-900">Itemized Cost Breakdown</h2>
                           <p className="text-sm text-gray-600 mt-1">
                             Search and adjust line-item costs from the active Program of Works version.
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCompactTables((prev) => !prev)}
+                            className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50"
+                          >
+                            {compactTables ? 'Comfortable Rows' : 'Compact Rows'}
+                          </button>
                           <div className="relative">
                             <input
                               type="text"
@@ -1194,6 +1241,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                     <ProgramOfWorksItemizedTable
                       groups={itemizedGroups.groups}
                       grandTotal={itemizedGroups.total}
+                      compact={compactTables}
                       editable
                       onSaveAdjustment={savePowAdjustment}
                       onClearAdjustment={clearPowAdjustment}
@@ -1227,13 +1275,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                   />
                 )}
 
-                {activeSection === 'description' && (
-                  <DescriptionOfWorksTable
-                    parts={worksParts}
-                    onPartClick={handlePartClick}
-                  />
-                )}
-
                 {activeSection === 'dupa-analysis' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -1245,7 +1286,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                     ) : dupaError ? (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-sm text-red-700">{dupaError}</div>
                     ) : dupaData ? (
-                      <DupaTab
+                      <DupaWorkspaceTab
                         data={dupaData}
                         formatCurrency={(value) => `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         formatNumber={(value) => value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1265,10 +1306,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
                 {activeSection === 'equipment' && (
                   <EquipmentRequirements equipment={equipment} />
-                )}
-
-                {activeSection === 'expenditures' && (
-                  <BreakdownOfExpenditures breakdown={expenditureBreakdown} />
                 )}
 
                 {activeSection === 'hauling' && (

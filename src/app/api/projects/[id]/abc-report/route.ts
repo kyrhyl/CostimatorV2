@@ -3,12 +3,14 @@ import mongoose from 'mongoose';
 import dbConnect from '@/lib/db/connect';
 import Project from '@/models/Project';
 import ProjectBOQ from '@/models/ProjectBOQ';
+import CostEstimate from '@/models/CostEstimate';
 import {
   getDivisionForPart,
   getPartDescription,
   normalizePart,
   PART_ORDER,
 } from '@/lib/utils/dpwh-constants';
+import { normalizePowMode } from '@/lib/utils/dupa-identity';
 
 function sortByPart(a: { part: string }, b: { part: string }) {
   const aKey = a.part.replace('PART ', '').trim();
@@ -17,7 +19,7 @@ function sortByPart(a: { part: string }, b: { part: string }) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -33,7 +35,69 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
 
-    const boqItems = await ProjectBOQ.find({ projectId: id }).lean();
+    const { searchParams } = new URL(req.url);
+    const mode = normalizePowMode(searchParams.get('mode'));
+    const estimateId = String(searchParams.get('estimateId') || '').trim();
+
+    let sourceItems: any[] = [];
+
+    if (mode === 'takeoff') {
+      let estimate: any = null;
+      if (estimateId && mongoose.Types.ObjectId.isValid(estimateId)) {
+        estimate = await CostEstimate.findOne({ _id: estimateId, projectId: id }).lean();
+      }
+      if (!estimate) {
+        estimate = await CostEstimate.findOne({ projectId: id }).sort({ createdAt: -1 }).lean();
+      }
+
+      const estimateLines = Array.isArray(estimate?.estimateLines) ? estimate.estimateLines : [];
+      sourceItems = estimateLines.map((line: any) => {
+        const quantity = Number(line.quantity || 0);
+        const directTotal = Number(line.directCost || 0) * quantity;
+        const markupValue = (Number(line.ocmCost || 0) + Number(line.cpCost || 0)) * quantity;
+        const vat = Number(line.vatCost || 0) * quantity;
+        const totalCost = Number(line.totalAmount || 0) || (directTotal + markupValue + vat);
+        const unitCost = quantity > 0 ? totalCost / quantity : 0;
+
+        return {
+          part: normalizePart(line.part || 'PART C'),
+          payItemNumber: line.payItemNumber || '',
+          payItemDescription: line.payItemDescription || '',
+          quantity,
+          unitOfMeasurement: line.unit || '',
+          directCost: directTotal,
+          markupValue,
+          vat,
+          totalIndirectCost: markupValue + vat,
+          totalCost,
+          unitCost,
+        };
+      });
+    } else {
+      const boqItems = await ProjectBOQ.find({ projectId: id }).lean();
+      sourceItems = boqItems.map((item: any) => {
+        const quantity = Number(item.quantity || 0);
+        const directTotal = Number(item.directCost || 0) * quantity;
+        const markupValue = (Number(item.ocmCost || 0) + Number(item.cpCost || 0)) * quantity;
+        const vat = Number(item.vatCost || 0) * quantity;
+        const totalCost = Number(item.totalAmount || 0) || (directTotal + markupValue + vat);
+        const unitCost = quantity > 0 ? totalCost / quantity : 0;
+
+        return {
+          part: normalizePart(item.part || 'PART C'),
+          payItemNumber: item.payItemNumber || '',
+          payItemDescription: item.payItemDescription || '',
+          quantity,
+          unitOfMeasurement: item.unitOfMeasurement || '',
+          directCost: directTotal,
+          markupValue,
+          vat,
+          totalIndirectCost: markupValue + vat,
+          totalCost,
+          unitCost,
+        };
+      });
+    }
 
     const partMap = new Map<string, {
       part: string;
@@ -61,17 +125,17 @@ export async function GET(
       };
     }>();
 
-    for (const item of boqItems) {
+    for (const item of sourceItems) {
       const part = normalizePart(item.part || 'PART C');
       const division = getDivisionForPart(part);
       const partDescription = getPartDescription(part);
       const directCost = item.directCost || 0;
-      const markupValue = (item.ocmCost || 0) + (item.cpCost || 0);
-      const vat = item.vatCost || 0;
-      const totalIndirectCost = markupValue + vat;
-      const totalCost = item.totalCost || directCost + totalIndirectCost;
+      const markupValue = item.markupValue || 0;
+      const vat = item.vat || 0;
+      const totalIndirectCost = item.totalIndirectCost || (markupValue + vat);
+      const totalCost = item.totalCost || (directCost + totalIndirectCost);
       const markupPercent = directCost > 0 ? (markupValue / directCost) * 100 : 0;
-      const unitCost = (item.quantity || 0) > 0 ? totalCost / item.quantity : 0;
+      const unitCost = item.unitCost || ((item.quantity || 0) > 0 ? totalCost / item.quantity : 0);
 
       if (!partMap.has(part)) {
         partMap.set(part, {

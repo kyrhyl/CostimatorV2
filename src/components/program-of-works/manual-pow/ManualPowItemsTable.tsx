@@ -25,22 +25,29 @@ export default function ManualPowItemsTable({
   onQuantityBlur,
   onDelete,
 }: ManualPowItemsTableProps) {
+  const initialLoading = loading && manualItems.length === 0;
+
   return (
-    <div className="mt-6 overflow-x-auto">
+    <div className="mt-4 overflow-x-auto">
+      {loading && manualItems.length > 0 && (
+        <div className="mb-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs text-blue-700">
+          Syncing latest BOQ changes...
+        </div>
+      )}
       <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-gray-50 sticky top-0 z-10">
           <tr>
-            <th className="px-3 py-2 text-left font-medium text-gray-600">Pay Item</th>
-            <th className="px-3 py-2 text-left font-medium text-gray-600">Description</th>
-            <th className="px-3 py-2 text-left font-medium text-gray-600">Unit</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-600">Quantity</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-600">Unit Cost</th>
-            <th className="px-3 py-2 text-right font-medium text-gray-600">Total Amount</th>
-             <th className="px-3 py-2"></th>
+            <th className="px-3 py-1.5 text-left font-medium text-gray-600">Pay Item</th>
+            <th className="px-3 py-1.5 text-left font-medium text-gray-600">Description</th>
+            <th className="px-3 py-1.5 text-left font-medium text-gray-600">Unit</th>
+            <th className="px-3 py-1.5 text-right font-medium text-gray-600">Quantity</th>
+            <th className="px-3 py-1.5 text-right font-medium text-gray-600">Unit Cost</th>
+            <th className="px-3 py-1.5 text-right font-medium text-gray-600">Total Amount</th>
+             <th className="px-3 py-1.5"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
-          {loading ? (
+          {initialLoading ? (
             <tr>
               <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
                 Loading manual BOQ lines...
@@ -57,15 +64,15 @@ export default function ManualPowItemsTable({
               const quantityValue = pendingQuantities[item._id] ?? item.quantity;
               return (
                 <tr key={item._id}>
-                  <td className="px-3 py-2 whitespace-nowrap font-semibold text-gray-900">
+                  <td className="px-3 py-1.5 whitespace-nowrap font-semibold text-gray-900">
                     {item.payItemNumber}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5">
                     <p className="text-gray-900">{item.payItemDescription}</p>
                     {item.part && <p className="text-xs text-gray-500">{item.part}</p>}
                   </td>
-                  <td className="px-3 py-2 text-gray-700">{item.unitOfMeasurement}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-1.5 text-gray-700">{item.unitOfMeasurement}</td>
+                  <td className="px-3 py-1.5 text-right">
                     <input
                       type="number"
                       min="0"
@@ -77,15 +84,15 @@ export default function ManualPowItemsTable({
                        disabled={readOnly || updatingRowId === item._id}
                     />
                   </td>
-                  <td className="px-3 py-2 text-right text-gray-900">
+                  <td className="px-3 py-1.5 text-right text-gray-900">
                     ₱{(item.unitCost || item.totalCost || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                  <td className="px-3 py-1.5 text-right font-semibold text-gray-900">
                     ₱{(item.totalAmount || (item.unitCost || 0) * item.quantity).toLocaleString('en-PH', {
                       minimumFractionDigits: 2,
                     })}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-1.5 text-right">
                      {readOnly ? (
                        <span className="text-xs text-gray-400">Read-only</span>
                      ) : (
@@ -107,10 +114,10 @@ export default function ManualPowItemsTable({
         {manualItems.length > 0 && (
           <tfoot>
             <tr className="bg-gray-50">
-              <td colSpan={5} className="px-3 py-3 text-right font-semibold text-gray-700">
+              <td colSpan={5} className="px-3 py-2.5 text-right font-semibold text-gray-700">
                 Total
               </td>
-              <td className="px-3 py-3 text-right font-bold text-gray-900">
+              <td className="px-3 py-2.5 text-right font-bold text-gray-900">
                 ₱{totalManualAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
               </td>
               <td></td>

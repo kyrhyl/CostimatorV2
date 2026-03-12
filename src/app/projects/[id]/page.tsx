@@ -409,20 +409,32 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <h1 className="text-3xl font-bold mb-2">{project.projectName}</h1>
             <p className="text-gray-600">{project.projectLocation}</p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              href={`/projects/${id}/edit`}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Edit Project
-            </Link>
+          {activeTab === 'overview' ? (
+            <div className="flex gap-2">
+              <Link
+                href={`/projects/${id}/edit`}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Edit Project
+              </Link>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          ) : activeTab === 'estimates' ? (
             <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              onClick={() => setShowCreateEstimateModal(true)}
+              className="inline-flex items-center gap-2 bg-dpwh-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-green-700 transition-all"
             >
-              Delete
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Program of Works
             </button>
-          </div>
+          ) : null}
         </div>
       </div>
 

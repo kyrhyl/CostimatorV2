@@ -9,6 +9,7 @@ interface FetchReportDataParams {
   endpoint: string;
   fallbackError: string;
   logLabel: string;
+  query?: Record<string, string | undefined>;
 }
 
 interface FetchReportDataResult<T> {
@@ -21,9 +22,17 @@ export async function fetchReportData<T>({
   endpoint,
   fallbackError,
   logLabel,
+  query,
 }: FetchReportDataParams): Promise<FetchReportDataResult<T>> {
   try {
-    const response = await fetch(`/api/projects/${projectId}/${endpoint}`);
+    const params = new URLSearchParams();
+    Object.entries(query || {}).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      }
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`/api/projects/${projectId}/${endpoint}${suffix}`);
     const json = (await response.json()) as ReportApiResponse<T>;
 
     if (json.success) {
