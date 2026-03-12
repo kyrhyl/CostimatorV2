@@ -15,6 +15,8 @@ import ProjectBOQ from '@/models/ProjectBOQ';  // LEGACY: Keep for backward comp
 import Project from '@/models/Project';
 import { calculateEstimate } from '@/lib/services/estimateCalculator';
 import mongoose from 'mongoose';
+import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
+import { AUDITOR_ROLE, PROJECT_READ_ROLES, PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
 /**
  * POST /api/projects/[id]/cost-estimates
@@ -25,6 +27,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     console.log('[Cost Estimate] Starting cost estimate creation...');
     await dbConnect();
     
@@ -366,6 +376,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_READ_ROLES)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     await dbConnect();
     
     const { id: projectId } = await params;
@@ -373,7 +391,7 @@ export async function GET(
     const cmpdVersion = searchParams.get('cmpdVersion');
     
     // Validate project exists
-    const project = await Project.findById(projectId);
+    const project = await Project.findById(projectId).select('activeCostEstimateId finalCostEstimateId');
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -383,15 +401,28 @@ export async function GET(
     
     // Get estimates with optional filtering
     const query: any = { projectId };
+    const isAuditorOnly = user.roles?.includes(AUDITOR_ROLE)
+      && !user.roles?.includes('admin')
+      && !user.roles?.includes('master_admin')
+      && !user.roles?.includes('project_creator');
+    if (isAuditorOnly) {
+      if (project.finalCostEstimateId) {
+        query._id = project.finalCostEstimateId;
+      } else {
+        query._id = null;
+      }
+    }
     if (cmpdVersion) {
       query.cmpdVersion = cmpdVersion;
     }
     const estimates = await CostEstimate.find(query).lean();
     
     // Format estimates to match frontend expectations
+    const finalId = project.finalCostEstimateId ? String(project.finalCostEstimateId) : '';
     const formattedEstimates = estimates.map(est => ({
       ...est,
-      name: est.estimateName
+      name: est.estimateName,
+      isFinalSubmission: finalId ? String((est as any)._id) === finalId : Boolean((est as any).isFinalSubmission),
     }));
     
     return NextResponse.json({
@@ -399,7 +430,8 @@ export async function GET(
       estimates: formattedEstimates,
       count: formattedEstimates.length,
       projectId,
-      activeCostEstimateId: project.activeCostEstimateId
+      activeCostEstimateId: project.activeCostEstimateId,
+      finalCostEstimateId: project.finalCostEstimateId,
     });
     
   } catch (error: any) {

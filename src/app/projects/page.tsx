@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 interface Project {
   _id: string;
@@ -35,6 +36,7 @@ const STATUS_COLORS = {
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,6 +51,9 @@ export default function ProjectsPage() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
+  const roles = session?.user?.roles || [];
+  const canWriteProjects = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
+  const canDeleteProjects = roles.includes('admin') || roles.includes('master_admin');
 
   const fetchProjects = async () => {
     try {
@@ -222,12 +227,14 @@ export default function ProjectsPage() {
             <div className="text-sm text-gray-600">
               Showing {projects.length} of {pagination.total} projects
             </div>
-            <Link
-              href="/projects/new"
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-            >
-              + New Project
-            </Link>
+            {canWriteProjects && (
+              <Link
+                href="/projects/new"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              >
+                + New Project
+              </Link>
+            )}
           </div>
         </div>
 
@@ -322,18 +329,22 @@ export default function ProjectsPage() {
                           >
                             View
                           </Link>
-                          <button
-                            onClick={() => handleDuplicateClick(project)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Duplicate
-                          </button>
-                          <button
-                            onClick={() => handleDelete(project._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                          {canWriteProjects && (
+                            <button
+                              onClick={() => handleDuplicateClick(project)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              Duplicate
+                            </button>
+                          )}
+                          {canDeleteProjects && (
+                            <button
+                              onClick={() => handleDelete(project._id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

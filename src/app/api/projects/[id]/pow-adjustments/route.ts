@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import dbConnect from '@/lib/db/connect';
 import PowAdjustment from '@/models/PowAdjustment';
+import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
+import { PROJECT_READ_ROLES, PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_READ_ROLES)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     await dbConnect();
     const { id } = await params;
 
@@ -41,6 +51,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     await dbConnect();
     const { id } = await params;
 
@@ -108,6 +126,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     await dbConnect();
     const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {

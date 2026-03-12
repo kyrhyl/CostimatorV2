@@ -162,6 +162,9 @@ export interface ICostEstimate extends Document {
   approvedBy?: string;
   approvedDate?: Date;
   rejectionReason?: string;
+  isFinalSubmission?: boolean;
+  finalTaggedAt?: Date;
+  finalTaggedBy?: string;
   
   // Cost Summary (Cached for performance)
   costSummary: ICostSummary;
@@ -412,6 +415,19 @@ const CostEstimateSchema = new Schema<ICostEstimate>(
     approvedBy: String,
     approvedDate: Date,
     rejectionReason: String,
+    isFinalSubmission: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    finalTaggedAt: {
+      type: Date,
+      default: null,
+    },
+    finalTaggedBy: {
+      type: String,
+      default: null,
+    },
     
     // Cost Summary (Cached)
     costSummary: {
@@ -453,6 +469,7 @@ const CostEstimateSchema = new Schema<ICostEstimate>(
 CostEstimateSchema.index({ projectId: 1, takeoffVersionId: 1 });
 CostEstimateSchema.index({ projectId: 1, cmpdVersion: 1 });
 CostEstimateSchema.index({ projectId: 1, status: 1 });
+CostEstimateSchema.index({ projectId: 1, isFinalSubmission: 1 });
 CostEstimateSchema.index({ projectId: 1, createdAt: -1 });
 CostEstimateSchema.index({ createdAt: -1 });
 

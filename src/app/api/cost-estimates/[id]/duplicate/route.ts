@@ -4,6 +4,8 @@ import dbConnect from '@/lib/db/connect';
 import CostEstimate from '@/models/CostEstimate';
 import Project from '@/models/Project';
 import PowAdjustment from '@/models/PowAdjustment';
+import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
+import { PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
 const getLineKey = (line: any, index: number) => `${line?._id || line?.payItemNumber || 'line'}-${index}`;
 
@@ -85,6 +87,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     await dbConnect();
     const { id } = await params;
 

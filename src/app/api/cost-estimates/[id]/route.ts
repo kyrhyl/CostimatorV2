@@ -8,6 +8,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import CostEstimate from '@/models/CostEstimate';
+import Project from '@/models/Project';
+import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
+import { AUDITOR_ROLE, PROJECT_READ_ROLES, PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
 /**
  * GET /api/cost-estimates/[id]
@@ -18,6 +21,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_READ_ROLES)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id: estimateId } = await params;
     
     console.log('[Cost Estimate Detail] Fetching estimate:', estimateId);
@@ -50,6 +61,14 @@ export async function GET(
         { error: 'Cost estimate not found' },
         { status: 404 }
       );
+    }
+
+    const isAuditorOnly = user.roles?.includes(AUDITOR_ROLE)
+      && !user.roles?.includes('admin')
+      && !user.roles?.includes('master_admin')
+      && !user.roles?.includes('project_creator');
+    if (isAuditorOnly && !estimate.isFinalSubmission) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
     // Format response to match frontend expectations
@@ -90,6 +109,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id: estimateId } = await params;
     
     console.log('[Cost Estimate Delete] Deleting estimate:', estimateId);
@@ -126,6 +153,21 @@ export async function DELETE(
     } else {
       await CostEstimate.findOneAndDelete({ estimateNumber: estimateId });
     }
+
+    if ((estimate as any).projectId) {
+      const project = await Project.findById((estimate as any).projectId).select('activeCostEstimateId');
+      const projectUpdate: any = {};
+      if ((estimate as any).isFinalSubmission) {
+        projectUpdate.finalCostEstimateId = null;
+        projectUpdate.finalSubmittedAt = null;
+      }
+      if (project?.activeCostEstimateId && String(project.activeCostEstimateId) === String((estimate as any)._id)) {
+        projectUpdate.activeCostEstimateId = null;
+      }
+      if (Object.keys(projectUpdate).length > 0) {
+        await Project.findByIdAndUpdate((estimate as any).projectId, { $set: projectUpdate });
+      }
+    }
     
     console.log('[Cost Estimate Delete] Estimate deleted successfully:', estimateId);
     return NextResponse.json({
@@ -155,6 +197,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRequiredRole(user, PROJECT_WRITE_ROLES)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id: estimateId } = await params;
 
     const isObjectId = /^[a-fA-F0-9]{24}$/.test(estimateId);

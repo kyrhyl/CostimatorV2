@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
 
 interface ProgramOfWorksTabProps {
@@ -12,6 +13,7 @@ interface ProgramOfWorksTabProps {
 
 export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorksTabProps) {
   const router = useRouter();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [estimates, setEstimates] = useState<any[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -20,6 +22,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
   const [deleting, setDeleting] = useState(false);
   const [duplicatingEstimateId, setDuplicatingEstimateId] = useState<string | null>(null);
   const [renamingEstimateId, setRenamingEstimateId] = useState<string | null>(null);
+  const [taggingFinalEstimateId, setTaggingFinalEstimateId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
@@ -166,6 +169,30 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
     }
   };
 
+  const handleTagAsFinal = async (estimate: any) => {
+    const estimateId = String(estimate?._id || '');
+    if (!estimateId) return;
+
+    setTaggingFinalEstimateId(estimateId);
+    try {
+      const res = await fetch(`/api/cost-estimates/${estimateId}/tag-final`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to tag final version');
+      }
+
+      await loadEstimates();
+      setNotice({ type: 'success', message: 'Version tagged as final submission.' });
+    } catch (err: any) {
+      setNotice({ type: 'error', message: `Failed to tag final: ${err.message}` });
+    } finally {
+      setTaggingFinalEstimateId(null);
+    }
+  };
+
   const getSourceMeta = (estimate: any) => {
     const source = estimate?.boqSource;
     if (source === 'manual') {
@@ -203,6 +230,8 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
   };
 
   const isManualPow = project?.powMode === 'manual';
+  const roles = session?.user?.roles || [];
+  const canModifyPow = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
 
   if (loading) {
     return (
@@ -226,19 +255,23 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
           <p className="text-gray-700 mb-6">
             Create your first cost estimate from a takeoff version to generate the Program of Works.
           </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 bg-dpwh-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-dpwh-blue-700 transition-all shadow-lg"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Create Program of Works
-          </button>
+          {canModifyPow ? (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 bg-dpwh-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-dpwh-blue-700 transition-all shadow-lg"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Program of Works
+            </button>
+          ) : (
+            <p className="text-sm text-slate-600">Your account is read-only and cannot create Program of Works versions.</p>
+          )}
         </div>
 
         {/* Create Estimate Modal */}
-        {showCreateModal && (
+        {showCreateModal && canModifyPow && (
           <CreateEstimateModal
             projectId={projectId}
             onClose={() => setShowCreateModal(false)}
@@ -293,12 +326,19 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
             {estimates.map((estimate) => (
               <tr key={estimate._id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">
-                  <Link
-                    href={getPowReportHref(estimate)}
-                    className="text-dpwh-blue-600 hover:text-dpwh-blue-800 font-medium text-left"
-                  >
-                    {estimate.name || estimate.estimateNumber || 'Untitled Estimate'}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={getPowReportHref(estimate)}
+                      className="text-dpwh-blue-600 hover:text-dpwh-blue-800 font-medium text-left"
+                    >
+                      {estimate.name || estimate.estimateNumber || 'Untitled Estimate'}
+                    </Link>
+                    {estimate.isFinalSubmission && (
+                      <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                        Final Submission
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">
                   {estimate.cmpdVersion || 'N/A'}
@@ -343,43 +383,80 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                       📄 POW Report
                     </Link>
                     <Link
-                      href={
-                        isTakeoffLinkedEstimate(estimate)
-                          ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
-                          : isManualPow
-                          ? `/projects/${projectId}/program-of-works?section=manual-boq`
-                          : `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
-                      }
-                      className="text-dpwh-green-600 hover:text-dpwh-green-800 text-sm px-2 py-1 rounded hover:bg-green-50"
-                      title={isTakeoffLinkedEstimate(estimate) ? 'Edit this version in workspace' : 'Open manual BOQ workspace'}
+                      href={`/projects/${projectId}/pow-audit?estimateId=${estimate._id}`}
+                      className="text-slate-700 hover:text-slate-900 text-sm px-2 py-1 rounded hover:bg-slate-100"
+                      title="Audit this version"
                     >
-                      ✏️ Edit in Workspace
+                      🧾 Audit Review
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicateEstimate(estimate)}
-                      disabled={duplicatingEstimateId === estimate._id}
-                      className="text-indigo-600 hover:text-indigo-800 text-sm px-2 py-1 rounded hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Duplicate this version"
-                    >
-                      {duplicatingEstimateId === estimate._id ? 'Duplicating...' : '⧉ Duplicate'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRenameEstimate(estimate)}
-                      disabled={renamingEstimateId === estimate._id}
-                      className="text-amber-700 hover:text-amber-900 text-sm px-2 py-1 rounded hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Rename this version"
-                    >
-                      {renamingEstimateId === estimate._id ? 'Renaming...' : '✎ Rename'}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteEstimate(estimate._id)}
-                      className="text-dpwh-red-600 hover:text-dpwh-red-800 text-sm px-2 py-1 rounded hover:bg-red-50"
-                      title="Delete"
-                    >
-                      🗑️ Delete
-                    </button>
+                    {!canModifyPow && (
+                      <Link
+                        href={
+                          isTakeoffLinkedEstimate(estimate)
+                            ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
+                            : `/projects/${projectId}/program-of-works?section=manual-boq`
+                        }
+                        className="text-dpwh-green-700 hover:text-dpwh-green-900 text-sm px-2 py-1 rounded hover:bg-green-50"
+                        title="View workspace"
+                      >
+                        👁 View Workspace
+                      </Link>
+                    )}
+                    {canModifyPow && (
+                      <>
+                        <Link
+                          href={
+                            isTakeoffLinkedEstimate(estimate)
+                              ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
+                              : isManualPow
+                              ? `/projects/${projectId}/program-of-works?section=manual-boq`
+                              : `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
+                          }
+                          className="text-dpwh-green-600 hover:text-dpwh-green-800 text-sm px-2 py-1 rounded hover:bg-green-50"
+                          title={isTakeoffLinkedEstimate(estimate) ? 'Edit this version in workspace' : 'Open manual BOQ workspace'}
+                        >
+                          ✏️ Edit in Workspace
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateEstimate(estimate)}
+                          disabled={duplicatingEstimateId === estimate._id}
+                          className="text-indigo-600 hover:text-indigo-800 text-sm px-2 py-1 rounded hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Duplicate this version"
+                        >
+                          {duplicatingEstimateId === estimate._id ? 'Duplicating...' : '⧉ Duplicate'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRenameEstimate(estimate)}
+                          disabled={renamingEstimateId === estimate._id}
+                          className="text-amber-700 hover:text-amber-900 text-sm px-2 py-1 rounded hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Rename this version"
+                        >
+                          {renamingEstimateId === estimate._id ? 'Renaming...' : '✎ Rename'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleTagAsFinal(estimate)}
+                          disabled={taggingFinalEstimateId === estimate._id || estimate.isFinalSubmission}
+                          className="text-emerald-700 hover:text-emerald-900 text-sm px-2 py-1 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Tag as final submission"
+                        >
+                          {estimate.isFinalSubmission
+                            ? '✓ Final'
+                            : taggingFinalEstimateId === estimate._id
+                            ? 'Tagging...'
+                            : '🏁 Tag Final'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEstimate(estimate._id)}
+                          className="text-dpwh-red-600 hover:text-dpwh-red-800 text-sm px-2 py-1 rounded hover:bg-red-50"
+                          title="Delete"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -401,7 +478,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
       </div>
 
       {/* Create Estimate Modal */}
-      {showCreateModal && (
+      {showCreateModal && canModifyPow && (
         <CreateEstimateModal
           projectId={projectId}
           onClose={() => setShowCreateModal(false)}

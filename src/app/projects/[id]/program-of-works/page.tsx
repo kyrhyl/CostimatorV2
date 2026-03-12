@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import ProjectDetailsCard from '@/components/program-of-works/ProjectDetailsCard';
 import FinancialSummaryCard from '@/components/program-of-works/FinancialSummaryCard';
 import EquipmentRequirements, { type Equipment } from '@/components/program-of-works/EquipmentRequirements';
@@ -163,6 +164,7 @@ export default function ProgramOfWorksWorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const projectId = params?.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -194,6 +196,8 @@ export default function ProgramOfWorksWorkspacePage() {
   const isManualWorkspace = isManualPow && !(viewFromQuery === 'takeoff' && Boolean(estimateIdFromQuery));
   const activeEstimateRef = selectedEstimateId || estimateIdFromQuery || '';
   const dupaEstimateRef = isManualWorkspace ? 'manual' : (selectedEstimateId || estimateIdFromQuery || '');
+  const roles = session?.user?.roles || [];
+  const canModifyPow = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
 
   useEffect(() => {
     if (projectId) {
@@ -984,7 +988,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
             ))}
           </nav>
 
-          {!isManualWorkspace && (
+          {!isManualWorkspace && canModifyPow && (
             <div className="p-2 border-t border-gray-200">
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -1025,6 +1029,11 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 <span className={`px-2 py-0.5 rounded-full font-semibold ${isManualWorkspace ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                   {isManualWorkspace ? 'Manual Workspace' : 'Takeoff Workspace'}
                 </span>
+                {!canModifyPow && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold">
+                    Read-only Mode
+                  </span>
+                )}
                 {activeEstimate?.estimateName && (
                   <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
                     {activeEstimate.estimateName}
@@ -1064,7 +1073,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
               >
                 DUPA Analysis
               </button>
-              {!isManualWorkspace && (
+              {!isManualWorkspace && canModifyPow && (
                 <button
                   onClick={() => setShowCreateModal(true)}
                   className="inline-flex items-center gap-2 bg-dpwh-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-green-700 transition-all"
@@ -1106,15 +1115,19 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 <p className="text-gray-700 mb-6">
                   Create your first cost estimate from a takeoff version to generate the Program of Works.
                 </p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center gap-2 bg-dpwh-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-dpwh-blue-700 transition-all shadow-lg"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Create Program of Works
-                </button>
+                {canModifyPow ? (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center gap-2 bg-dpwh-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-dpwh-blue-700 transition-all shadow-lg"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Program of Works
+                  </button>
+                ) : (
+                  <p className="text-sm text-slate-600">This workspace is read-only for your account.</p>
+                )}
               </div>
             ) : isManualWorkspace && loadingManualBoq && activeSection !== 'manual-boq' ? (
               <div className="flex items-center justify-center py-12">
@@ -1148,7 +1161,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                     manualConfig={project?.manualPowConfig || undefined}
                     manualItems={manualBoqItems}
                     loading={loadingManualBoq}
-                    readOnly={project?.powMode !== 'manual'}
+                    readOnly={project?.powMode !== 'manual' || !canModifyPow}
                     onReload={loadManualBoq}
                     onManualConfigSaved={fetchProject}
                     onManualVersionSaved={async () => {
@@ -1242,9 +1255,9 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                       groups={itemizedGroups.groups}
                       grandTotal={itemizedGroups.total}
                       compact={compactTables}
-                      editable
-                      onSaveAdjustment={savePowAdjustment}
-                      onClearAdjustment={clearPowAdjustment}
+                      editable={canModifyPow}
+                      onSaveAdjustment={canModifyPow ? savePowAdjustment : undefined}
+                      onClearAdjustment={canModifyPow ? clearPowAdjustment : undefined}
                     />
                   </div>
                 )}
@@ -1292,9 +1305,10 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                         formatNumber={(value) => value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         selectedPrintKey={selectedDupaPrintKey}
                         onSelectedPrintKeyChange={setSelectedDupaPrintKey}
+                        readOnly={!canModifyPow}
                         adjustedKeys={Object.keys(dupaAdjustments)}
-                        onSaveDupaAdjustment={saveDupaAdjustment}
-                        onResetDupaAdjustment={resetDupaAdjustment}
+                        onSaveDupaAdjustment={canModifyPow ? saveDupaAdjustment : undefined}
+                        onResetDupaAdjustment={canModifyPow ? resetDupaAdjustment : undefined}
                         laborLocation={activeEstimate?.location || project?.district || ''}
                         district={project?.district || ''}
                       />
@@ -1314,6 +1328,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                     project={project}
                     powMode={project?.powMode}
                     activeEstimateId={activeEstimate?._id}
+                    readOnly={!canModifyPow}
                     onEstimateRepriced={(estimateId) => {
                       setSelectedEstimateId(estimateId);
                       void loadEstimates();
@@ -1358,7 +1373,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
         </div>
       </div>
 
-      {showCreateModal && (
+      {showCreateModal && canModifyPow && (
         <CreateEstimateModal
           projectId={projectId}
           onClose={() => setShowCreateModal(false)}

@@ -3,6 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import VersionStatusBadge from '@/components/versioning/VersionStatusBadge';
 import EstimateList from '@/components/cost-estimates/EstimateList';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
@@ -81,6 +82,7 @@ interface ProjectEstimate {
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'estimates' | 'takeoff'>('overview');
@@ -377,6 +379,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const longitude = project?.projectComponent?.coordinates?.longitude;
   const hasCoordinates = typeof latitude === 'number' && typeof longitude === 'number';
   const mapHref = hasCoordinates ? `https://www.google.com/maps?q=${latitude},${longitude}` : null;
+  const roles = session?.user?.roles || [];
+  const canEditProject = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
+  const canDeleteProject = roles.includes('admin') || roles.includes('master_admin');
+  const canCreatePow = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
 
   if (loading) {
     return (
@@ -409,22 +415,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <h1 className="text-3xl font-bold mb-2">{project.projectName}</h1>
             <p className="text-gray-600">{project.projectLocation}</p>
           </div>
-          {activeTab === 'overview' ? (
+          {activeTab === 'overview' && canEditProject ? (
             <div className="flex gap-2">
-              <Link
-                href={`/projects/${id}/edit`}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Edit Project
-              </Link>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Delete
-              </button>
+              {canEditProject && (
+                <Link
+                  href={`/projects/${id}/edit`}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Edit Project
+                </Link>
+              )}
+              {canDeleteProject && (
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              )}
             </div>
-          ) : activeTab === 'estimates' ? (
+          ) : activeTab === 'estimates' && canCreatePow ? (
             <button
               onClick={() => setShowCreateEstimateModal(true)}
               className="inline-flex items-center gap-2 bg-dpwh-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-green-700 transition-all"

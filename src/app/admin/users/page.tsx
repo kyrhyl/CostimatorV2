@@ -18,6 +18,7 @@ const ROLE_OPTIONS = [
   { value: 'master_admin', label: 'Master Admin' },
   { value: 'admin', label: 'Admin' },
   { value: 'project_creator', label: 'Project Creator' },
+  { value: 'auditor', label: 'Auditor' },
   { value: 'viewer', label: 'Viewer' },
 ];
 

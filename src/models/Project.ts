@@ -190,6 +190,8 @@ export interface IProject extends Document {
   // Multi-version architecture references
   activeTakeoffVersionId?: mongoose.Types.ObjectId;
   activeCostEstimateId?: mongoose.Types.ObjectId;
+  finalCostEstimateId?: mongoose.Types.ObjectId;
+  finalSubmittedAt?: Date;
 
   // Timestamps
   createdAt: Date;
@@ -658,6 +660,16 @@ const ProjectSchema = new Schema<IProject>(
     activeCostEstimateId: {
       type: Schema.Types.ObjectId,
       ref: 'CostEstimate',
+      default: null,
+    },
+    finalCostEstimateId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CostEstimate',
+      default: null,
+      index: true,
+    },
+    finalSubmittedAt: {
+      type: Date,
       default: null,
     },
   },

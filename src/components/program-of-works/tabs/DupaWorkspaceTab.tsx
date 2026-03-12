@@ -529,6 +529,17 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                          <td className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-600" colSpan={4}>
+                            Labor Subtotal
+                          </td>
+                          <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
+                            {formatCurrency(selectedItem.totals.laborSubmitted)}
+                          </td>
+                          <td className="py-2" />
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                   {editing && <button type="button" className="mt-2 text-xs font-semibold text-blue-700" onClick={() => updateDraft((current) => ({ ...current, laborItems: [...current.laborItems, { designation: '', noOfPersons: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }))}>+ Add labor row</button>}
@@ -560,6 +571,17 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                          <td className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-600" colSpan={4}>
+                            Equipment Subtotal
+                          </td>
+                          <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
+                            {formatCurrency(selectedItem.totals.equipmentSubmitted)}
+                          </td>
+                          <td className="py-2" />
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                   {editing && <button type="button" className="mt-2 text-xs font-semibold text-blue-700" onClick={() => updateDraft((current) => ({ ...current, equipmentItems: [...current.equipmentItems, { equipmentId: '', description: '', noOfUnits: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }))}>+ Add equipment row</button>}
@@ -591,6 +613,17 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                          <td className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-600" colSpan={4}>
+                            Material Subtotal
+                          </td>
+                          <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
+                            {formatCurrency(selectedItem.totals.materialsSubmitted)}
+                          </td>
+                          <td className="py-2" />
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                   {editing && <button type="button" className="mt-2 text-xs font-semibold text-blue-700" onClick={() => updateDraft((current) => ({ ...current, materialItems: [...current.materialItems, { materialCode: '', description: '', unit: '', quantity: 0, unitCost: 0, amount: 0 }] }))}>+ Add material row</button>}
@@ -604,6 +637,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                   <div className="rounded border border-slate-200 p-2"><p className="text-xs text-slate-500">Equipment</p><p className="font-semibold tabular-nums">{formatCurrency(selectedItem.totals.equipmentSubmitted)}</p></div>
                   <div className="rounded border border-slate-200 p-2"><p className="text-xs text-slate-500">Materials</p><p className="font-semibold tabular-nums">{formatCurrency(selectedItem.totals.materialsSubmitted)}</p></div>
                   <div className="rounded border border-slate-200 bg-slate-50 p-2"><p className="text-xs text-slate-500">Direct Unit Subtotal</p><p className="font-semibold tabular-nums">{formatCurrency(directUnitSubtotal)}</p></div>
+                  <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">Indirect Cost Subtotal</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(indirectSubtotal)}</p></div>
                   <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">OCM ({formatNumber(ocmPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.ocmValue)}</p></div>
                   <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">CP ({formatNumber(cpPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.cpValue)}</p></div>
                   <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">VAT ({formatNumber(vatPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.vatValue)}</p></div>

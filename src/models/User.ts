@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type UserRole = 'master_admin' | 'admin' | 'project_creator' | 'viewer';
+export type UserRole = 'master_admin' | 'admin' | 'project_creator' | 'auditor' | 'viewer';
 
 export interface IUser extends Document {
   email: string;

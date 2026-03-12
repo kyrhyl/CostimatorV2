@@ -52,6 +52,14 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.userId = (user as any).id;
         token.roles = (user as any).roles || [];
+      } else if (token.userId) {
+        await dbConnect();
+        const latestUser = await User.findById(token.userId).select('roles status').lean();
+        if (!latestUser || latestUser.status !== 'active') {
+          token.roles = [];
+        } else {
+          token.roles = latestUser.roles || [];
+        }
       }
       return token;
     },

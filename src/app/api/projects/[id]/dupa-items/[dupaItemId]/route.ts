@@ -81,6 +81,45 @@ function findEstimateLineIndex(estimateLines: any[], sourceId: string, payItemNu
   return estimateLines.findIndex((line) => String(line.payItemNumber || '') === String(payItemNumber || ''));
 }
 
+function computeAuthoritativeTotals(input: {
+  laborItems: any[];
+  equipmentItems: any[];
+  materialItems: any[];
+  outputPerHour: number;
+  ocmPercent: number;
+  cpPercent: number;
+  vatPercent: number;
+}) {
+  const laborSubmitted = (input.laborItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
+  const equipmentSubmitted = (input.equipmentItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
+  const directCostSubmitted = laborSubmitted + equipmentSubmitted;
+  const outputSubmitted = input.outputPerHour > 0 ? input.outputPerHour : 1;
+  const directUnitCostSubmitted = directCostSubmitted / outputSubmitted;
+  const materialsSubmitted = (input.materialItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
+  const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
+  const ocmValue = directUnitPlusMaterialsSubmitted * (input.ocmPercent / 100);
+  const cpValue = directUnitPlusMaterialsSubmitted * (input.cpPercent / 100);
+  const vatValue = (directUnitPlusMaterialsSubmitted + ocmValue + cpValue) * (input.vatPercent / 100);
+  const totalUnitCostSubmitted = directUnitPlusMaterialsSubmitted + ocmValue + cpValue + vatValue;
+
+  return {
+    laborSubmitted,
+    equipmentSubmitted,
+    directCostSubmitted,
+    outputSubmitted,
+    directUnitCostSubmitted,
+    materialsSubmitted,
+    directUnitPlusMaterialsSubmitted,
+    ocmPercent: input.ocmPercent,
+    ocmValue,
+    cpPercent: input.cpPercent,
+    cpValue,
+    vatPercent: input.vatPercent,
+    vatValue,
+    totalUnitCostSubmitted,
+  };
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; dupaItemId: string }> },
@@ -126,6 +165,7 @@ export async function PUT(
     let canonicalResult: any = null;
     let baseSnapshot: any = null;
     let resolvedSourceType: 'projectBoq' | 'estimateLine' = sourceType;
+    let authoritativeTotals: any = payload.totals || {};
 
     if (mode === 'manual') {
       const boqItem = await ProjectBOQ.findOne({ _id: sourceId, projectId: id });
@@ -152,11 +192,20 @@ export async function PUT(
       };
 
       const quantity = asNumber(payload.quantity, asNumber(boqItem.quantity, 0));
-      const directCost = asNumber(payload.totals?.directUnitPlusMaterialsSubmitted, 0);
-      const ocmCost = asNumber(payload.totals?.ocmValue, 0);
-      const cpCost = asNumber(payload.totals?.cpValue, 0);
-      const vatCost = asNumber(payload.totals?.vatValue, 0);
-      const totalCost = asNumber(payload.totals?.totalUnitCostSubmitted, directCost + ocmCost + cpCost + vatCost);
+      authoritativeTotals = computeAuthoritativeTotals({
+        laborItems: payload.laborItems,
+        equipmentItems: payload.equipmentItems,
+        materialItems: payload.materialItems,
+        outputPerHour: payload.outputPerHour,
+        ocmPercent: asNumber(payload.totals?.ocmPercent, asNumber(boqItem.ocmPercentage, 0)),
+        cpPercent: asNumber(payload.totals?.cpPercent, asNumber(boqItem.cpPercentage, 0)),
+        vatPercent: asNumber(payload.totals?.vatPercent, asNumber(boqItem.vatPercentage, 0)),
+      });
+      const directCost = authoritativeTotals.directUnitPlusMaterialsSubmitted;
+      const ocmCost = authoritativeTotals.ocmValue;
+      const cpCost = authoritativeTotals.cpValue;
+      const vatCost = authoritativeTotals.vatValue;
+      const totalCost = authoritativeTotals.totalUnitCostSubmitted;
 
       boqItem.outputPerHour = payload.outputPerHour;
       boqItem.quantity = quantity;
@@ -164,12 +213,12 @@ export async function PUT(
       boqItem.equipmentItems = payload.equipmentItems as any;
       boqItem.materialItems = payload.materialItems as any;
       boqItem.directCost = directCost;
-      boqItem.ocmPercentage = asNumber(payload.totals?.ocmPercent, boqItem.ocmPercentage);
+      boqItem.ocmPercentage = authoritativeTotals.ocmPercent;
       boqItem.ocmCost = ocmCost;
-      boqItem.cpPercentage = asNumber(payload.totals?.cpPercent, boqItem.cpPercentage);
+      boqItem.cpPercentage = authoritativeTotals.cpPercent;
       boqItem.cpCost = cpCost;
       boqItem.subtotalWithMarkup = directCost + ocmCost + cpCost;
-      boqItem.vatPercentage = asNumber(payload.totals?.vatPercent, boqItem.vatPercentage);
+      boqItem.vatPercentage = authoritativeTotals.vatPercent;
       boqItem.vatCost = vatCost;
       boqItem.totalCost = totalCost;
       boqItem.unitCost = totalCost;
@@ -193,14 +242,23 @@ export async function PUT(
       const current = estimateLines[lineIndex] as any;
       const lineId = ensureEstimateLineId(current, lineIndex);
       const quantity = asNumber(payload.quantity, asNumber(current.quantity, 0));
-      const laborCost = asNumber(payload.totals?.laborSubmitted, 0);
-      const equipmentCost = asNumber(payload.totals?.equipmentSubmitted, 0);
-      const materialCost = asNumber(payload.totals?.materialsSubmitted, 0);
-      const directCost = asNumber(payload.totals?.directUnitPlusMaterialsSubmitted, laborCost + equipmentCost + materialCost);
-      const ocmCost = asNumber(payload.totals?.ocmValue, 0);
-      const cpCost = asNumber(payload.totals?.cpValue, 0);
-      const vatCost = asNumber(payload.totals?.vatValue, 0);
-      const unitPrice = asNumber(payload.totals?.totalUnitCostSubmitted, directCost + ocmCost + cpCost + vatCost);
+      authoritativeTotals = computeAuthoritativeTotals({
+        laborItems: payload.laborItems,
+        equipmentItems: payload.equipmentItems,
+        materialItems: payload.materialItems,
+        outputPerHour: payload.outputPerHour,
+        ocmPercent: asNumber(payload.totals?.ocmPercent, asNumber(estimate.ocmPercentage, 0)),
+        cpPercent: asNumber(payload.totals?.cpPercent, asNumber(estimate.cpPercentage, 0)),
+        vatPercent: asNumber(payload.totals?.vatPercent, asNumber(estimate.vatPercentage, 0)),
+      });
+      const laborCost = authoritativeTotals.laborSubmitted;
+      const equipmentCost = authoritativeTotals.equipmentSubmitted;
+      const materialCost = authoritativeTotals.materialsSubmitted;
+      const directCost = authoritativeTotals.directUnitPlusMaterialsSubmitted;
+      const ocmCost = authoritativeTotals.ocmValue;
+      const cpCost = authoritativeTotals.cpValue;
+      const vatCost = authoritativeTotals.vatValue;
+      const unitPrice = authoritativeTotals.totalUnitCostSubmitted;
 
       baseSnapshot = {
         lineId,
@@ -272,7 +330,7 @@ export async function PUT(
       laborItems: payload.laborItems,
       equipmentItems: payload.equipmentItems,
       materialItems: payload.materialItems,
-      totals: payload.totals,
+      totals: authoritativeTotals,
       reason: payload.reason,
       updatedBy: payload.updatedBy,
     };
@@ -303,7 +361,7 @@ export async function PUT(
           migrationVersion: 1,
           payItemNumber: payload.payItemNumber,
           quantity: payload.quantity,
-          unitCost: asNumber(payload.totals?.totalUnitCostSubmitted, 0),
+          unitCost: asNumber(authoritativeTotals?.totalUnitCostSubmitted, 0),
           reason: payload.reason,
           updatedBy: payload.updatedBy,
         },

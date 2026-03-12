@@ -24,6 +24,7 @@ interface ProgramOfWorksHaulingProps {
   projectId: string;
   powMode?: 'takeoff' | 'manual';
   activeEstimateId?: string;
+  readOnly?: boolean;
   onEstimateRepriced?: (estimateId: string) => void;
   project: {
     distanceFromOffice?: number;
@@ -56,6 +57,7 @@ export default function ProgramOfWorksHauling({
   projectId,
   powMode,
   activeEstimateId,
+  readOnly = false,
   onEstimateRepriced,
   project,
 }: ProgramOfWorksHaulingProps) {
@@ -140,6 +142,10 @@ export default function ProgramOfWorksHauling({
   };
 
   const handleSave = async () => {
+    if (readOnly) {
+      setMessage('Read-only mode: configuration updates are disabled.');
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -170,6 +176,10 @@ export default function ProgramOfWorksHauling({
   };
 
   const handleRecalculate = async () => {
+    if (readOnly) {
+      setMessage('Read-only mode: recalculation is disabled.');
+      return;
+    }
     if (!confirm('Recalculate all BOQ items with current hauling configuration? This will update material costs using the latest hauling computation.')) {
       return;
     }
@@ -196,6 +206,10 @@ export default function ProgramOfWorksHauling({
   };
 
   const handleRepriceEstimate = async () => {
+    if (readOnly) {
+      setMessage('Read-only mode: repricing is disabled.');
+      return;
+    }
     if (!activeEstimateId) {
       setMessage('Select an estimate first before repricing.');
       return;
@@ -248,6 +262,11 @@ export default function ProgramOfWorksHauling({
         {message && (
           <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">{message}</div>
         )}
+        {readOnly && (
+          <div className="text-xs text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
+            Auditor mode: this section is view-only.
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-4">
@@ -261,6 +280,7 @@ export default function ProgramOfWorksHauling({
                   type="text"
                   value={materialName}
                   onChange={(e) => setMaterialName(e.target.value)}
+                  disabled={readOnly}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   placeholder="e.g., Sand & Gravel"
                 />
@@ -271,6 +291,7 @@ export default function ProgramOfWorksHauling({
                   type="text"
                   value={materialSource}
                   onChange={(e) => setMaterialSource(e.target.value)}
+                  disabled={readOnly}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   placeholder="e.g., Quarry location"
                 />
@@ -283,6 +304,7 @@ export default function ProgramOfWorksHauling({
                   min="0"
                   value={totalDistance}
                   onChange={(e) => setTotalDistance(parseFloat(e.target.value) || 0)}
+                  disabled={readOnly}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
               </div>
@@ -294,6 +316,7 @@ export default function ProgramOfWorksHauling({
                   min="0"
                   value={freeHaulingDistance}
                   onChange={(e) => setFreeHaulingDistance(parseFloat(e.target.value) || 0)}
+                  disabled={readOnly}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
               </div>
@@ -330,6 +353,7 @@ export default function ProgramOfWorksHauling({
                         min="0"
                         value={segment.distanceKm}
                         onChange={(e) => updateSegment(index, { distanceKm: parseFloat(e.target.value) || 0 })}
+                        disabled={readOnly}
                         className="px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Distance km"
                       />
@@ -339,6 +363,7 @@ export default function ProgramOfWorksHauling({
                         min="0"
                         value={segment.speedUnloadedKmh}
                         onChange={(e) => updateSegment(index, { speedUnloadedKmh: parseFloat(e.target.value) || 0 })}
+                        disabled={readOnly}
                         className="px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Unloaded km/hr"
                       />
@@ -348,6 +373,7 @@ export default function ProgramOfWorksHauling({
                         min="0"
                         value={segment.speedLoadedKmh}
                         onChange={(e) => updateSegment(index, { speedLoadedKmh: parseFloat(e.target.value) || 0 })}
+                        disabled={readOnly}
                         className="px-2 py-1.5 border border-gray-300 rounded text-sm"
                         placeholder="Loaded km/hr"
                       />
@@ -379,8 +405,9 @@ export default function ProgramOfWorksHauling({
                     step="1"
                     min="0"
                     value={equipmentCapacity}
-                    onChange={(e) => setEquipmentCapacity(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                     onChange={(e) => setEquipmentCapacity(parseFloat(e.target.value) || 0)}
+                     disabled={readOnly}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   />
                 </div>
                 <div>
@@ -390,8 +417,9 @@ export default function ProgramOfWorksHauling({
                     step="0.01"
                     min="0"
                     value={equipmentRentalRate}
-                    onChange={(e) => setEquipmentRentalRate(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                     onChange={(e) => setEquipmentRentalRate(parseFloat(e.target.value) || 0)}
+                     disabled={readOnly}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   />
                 </div>
               </div>
@@ -426,17 +454,17 @@ export default function ProgramOfWorksHauling({
           </div>
 
           <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full inline-flex items-center justify-center gap-2 bg-dpwh-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-blue-700 disabled:opacity-60"
-            >
+              <button
+                onClick={handleSave}
+                disabled={saving || readOnly}
+                className="w-full inline-flex items-center justify-center gap-2 bg-dpwh-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-blue-700 disabled:opacity-60"
+              >
               {saving ? 'Saving...' : 'Save Configuration'}
             </button>
             {powMode === 'manual' && (
               <button
                 onClick={handleRecalculate}
-                disabled={recalculating}
+                disabled={recalculating || readOnly}
                 className="w-full inline-flex items-center justify-center gap-2 bg-dpwh-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-green-700 disabled:opacity-60"
               >
                 {recalculating ? 'Recalculating...' : 'Recalculate BOQ Costs'}
@@ -445,7 +473,7 @@ export default function ProgramOfWorksHauling({
             {powMode !== 'manual' && (
               <button
                 onClick={handleRepriceEstimate}
-                disabled={repricingEstimate || !activeEstimateId}
+                disabled={repricingEstimate || !activeEstimateId || readOnly}
                 className="w-full inline-flex items-center justify-center gap-2 bg-dpwh-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-dpwh-blue-700 disabled:opacity-60"
               >
                 {repricingEstimate ? 'Repricing Estimate...' : 'Reprice Current Estimate'}
