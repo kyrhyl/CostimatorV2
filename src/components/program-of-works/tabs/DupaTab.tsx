@@ -204,7 +204,7 @@ export function DupaTab({
           setEquipmentOptions(
             equipmentJson.data.map((entry: any) => ({
               _id: String(entry._id),
-              description: String(entry.description || ''),
+              description: String(entry.completeDescription || entry.description || ''),
               hourlyRate: Number(entry.hourlyRate || 0),
             })),
           );

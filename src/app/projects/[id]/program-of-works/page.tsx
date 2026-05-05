@@ -3,23 +3,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useSession } from 'next-auth/react';
 import ProjectDetailsCard from '@/components/program-of-works/ProjectDetailsCard';
 import FinancialSummaryCard from '@/components/program-of-works/FinancialSummaryCard';
 import EquipmentRequirements, { type Equipment } from '@/components/program-of-works/EquipmentRequirements';
 import type { ExpenditureBreakdown } from '@/components/program-of-works/BreakdownOfExpenditures';
-import ProgramOfWorksItemizedTable from '@/components/program-of-works/ProgramOfWorksItemizedTable';
 import ProgramOfWorksApprovalStatus from '@/components/program-of-works/ProgramOfWorksApprovalStatus';
 import ProgramOfWorksRevisionHistory from '@/components/program-of-works/ProgramOfWorksRevisionHistory';
-import ProgramOfWorksHauling from '@/components/program-of-works/ProgramOfWorksHauling';
 import ProgramOfWorksOverviewSummary from '@/components/program-of-works/ProgramOfWorksOverviewSummary';
 import DigitalSignOffs, { type Signatory } from '@/components/program-of-works/DigitalSignOffs';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
-import ManualPowManager from '@/components/program-of-works/ManualPowManager';
-import { DupaWorkspaceTab } from '@/components/program-of-works/tabs/DupaWorkspaceTab';
 import type { ProjectBoqItem } from '@/components/program-of-works/manual-pow/types';
 import type { DupaReportData } from '@/types/dupa';
 import { derivePartLabel, normalizePart } from '@/lib/utils/dpwh-constants';
+import { fetchJsonDedup } from '@/lib/utils/fetch-json-dedup';
+
+const ProgramOfWorksItemizedTable = dynamic(() => import('@/components/program-of-works/ProgramOfWorksItemizedTable'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading itemized table...</div>
+});
+const ProgramOfWorksHauling = dynamic(() => import('@/components/program-of-works/ProgramOfWorksHauling'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading hauling module...</div>
+});
+const ManualPowManager = dynamic(() => import('@/components/program-of-works/ManualPowManager'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading manual POW workspace...</div>
+});
+const DupaWorkspaceTab = dynamic(
+  () => import('@/components/program-of-works/tabs/DupaWorkspaceTab').then((mod) => mod.DupaWorkspaceTab),
+  {
+    loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading DUPA workspace...</div>
+  }
+);
 
 interface Project {
   _id: string;
@@ -99,6 +113,94 @@ interface DupaAdjustmentRecord {
 const getLineKey = (line: any, index: number) => `${line?._id || line?.payItemNumber || 'line'}-${index}`;
 const getDupaItemKey = (item: DupaReportData['items'][number], index: number) =>
   item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const recomputeDupaTotals = (
+  item: DupaReportData['items'][number],
+  laborItems: DupaReportData['items'][number]['laborItems'],
+  equipmentItems: DupaReportData['items'][number]['equipmentItems'],
+  materialItems: DupaReportData['items'][number]['materialItems'],
+  percentSource?: Partial<DupaReportData['items'][number]['totals']>,
+) => {
+  const normalizedLabor = (laborItems || []).map((row) => {
+    const noOfPersons = toNumber(row.noOfPersons, 0);
+    const noOfHours = toNumber(row.noOfHours, 0);
+    const hourlyRate = toNumber(row.hourlyRate, 0);
+    return {
+      ...row,
+      noOfPersons,
+      noOfHours,
+      hourlyRate,
+      amount: noOfPersons * noOfHours * hourlyRate,
+    };
+  });
+
+  const normalizedEquipment = (equipmentItems || []).map((row) => {
+    const noOfUnits = toNumber(row.noOfUnits, 0);
+    const noOfHours = toNumber(row.noOfHours, 0);
+    const hourlyRate = toNumber(row.hourlyRate, 0);
+    return {
+      ...row,
+      noOfUnits,
+      noOfHours,
+      hourlyRate,
+      amount: noOfUnits * noOfHours * hourlyRate,
+    };
+  });
+
+  const normalizedMaterials = (materialItems || []).map((row) => {
+    const quantity = toNumber(row.quantity, 0);
+    const unitCost = toNumber(row.unitCost, 0);
+    return {
+      ...row,
+      quantity,
+      unitCost,
+      amount: quantity * unitCost,
+    };
+  });
+
+  const laborSubmitted = normalizedLabor.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
+  const equipmentSubmitted = normalizedEquipment.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
+  const directCostSubmitted = laborSubmitted + equipmentSubmitted;
+  const outputSubmitted = toNumber(item.outputPerHour, 1) > 0 ? toNumber(item.outputPerHour, 1) : 1;
+  const directUnitCostSubmitted = directCostSubmitted / outputSubmitted;
+  const materialsSubmitted = normalizedMaterials.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
+  const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
+  const ocmPercent = toNumber(percentSource?.ocmPercent, toNumber(item.totals?.ocmPercent, 0));
+  const cpPercent = toNumber(percentSource?.cpPercent, toNumber(item.totals?.cpPercent, 0));
+  const vatPercent = toNumber(percentSource?.vatPercent, toNumber(item.totals?.vatPercent, 0));
+  const ocmValue = directUnitPlusMaterialsSubmitted * (ocmPercent / 100);
+  const cpValue = directUnitPlusMaterialsSubmitted * (cpPercent / 100);
+  const vatValue = (directUnitPlusMaterialsSubmitted + ocmValue + cpValue) * (vatPercent / 100);
+  const totalUnitCostSubmitted = directUnitPlusMaterialsSubmitted + ocmValue + cpValue + vatValue;
+
+  return {
+    laborItems: normalizedLabor,
+    equipmentItems: normalizedEquipment,
+    materialItems: normalizedMaterials,
+    totals: {
+      ...item.totals,
+      laborSubmitted,
+      equipmentSubmitted,
+      directCostSubmitted,
+      outputSubmitted,
+      directUnitCostSubmitted,
+      materialsSubmitted,
+      directUnitPlusMaterialsSubmitted,
+      ocmPercent,
+      ocmValue,
+      cpPercent,
+      cpValue,
+      vatPercent,
+      vatValue,
+      totalUnitCostSubmitted,
+    },
+  };
+};
 
 const applyEstimateAdjustments = (estimate: any, adjustmentsByLineKey: Record<string, PowAdjustment>) => {
   if (!estimate?.estimateLines?.length) return estimate;
@@ -270,8 +372,7 @@ export default function ProgramOfWorksWorkspacePage() {
 
   const fetchProject = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}`);
-      const result = await response.json();
+      const { data: result } = await fetchJsonDedup(`/api/projects/${projectId}`, `project:${projectId}`);
       if (result.success) {
         setProject(result.data);
       }
@@ -284,8 +385,10 @@ export default function ProgramOfWorksWorkspacePage() {
 
   const loadEstimates = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/cost-estimates`);
-      const data = await res.json();
+      const { data } = await fetchJsonDedup(
+        `/api/projects/${projectId}/cost-estimates`,
+        `cost-estimates:${projectId}`
+      );
       const estimatesList = data.data || data.estimates || [];
       setEstimates(estimatesList);
 
@@ -319,8 +422,7 @@ export default function ProgramOfWorksWorkspacePage() {
   const loadEstimateDetail = async (estimateId: string) => {
     setLoadingEstimate(true);
     try {
-      const res = await fetch(`/api/cost-estimates/${estimateId}`);
-      const data = await res.json();
+      const { data } = await fetchJsonDedup(`/api/cost-estimates/${estimateId}`, `estimate:${estimateId}`);
       setSelectedEstimate(data.data || data);
     } catch (err) {
       console.error('Failed to load estimate detail:', err);
@@ -336,8 +438,7 @@ export default function ProgramOfWorksWorkspacePage() {
       setLoadingManualBoq(true);
     }
     try {
-      const res = await fetch(`/api/project-boq?projectId=${projectId}`);
-      const data = await res.json();
+      const { data } = await fetchJsonDedup(`/api/project-boq?projectId=${projectId}`, `manual-boq:${projectId}`);
       if (data.success) {
         setManualBoqItems(data.data || []);
       }
@@ -356,8 +457,8 @@ export default function ProgramOfWorksWorkspacePage() {
       if (!isManualWorkspace && activeEstimateRef) {
         params.set('estimateId', activeEstimateRef);
       }
-      const res = await fetch(`/api/projects/${projectId}/pow-report?${params.toString()}`);
-      const data = await res.json();
+      const requestUrl = `/api/projects/${projectId}/pow-report?${params.toString()}`;
+      const { res, data } = await fetchJsonDedup(requestUrl, `pow-report:${projectId}:${params.toString()}`);
       if (res.ok && data?.success) {
         setPrescribedBreakdown({
           eao: Number(data?.data?.breakdown?.eao || 0),
@@ -403,12 +504,16 @@ export default function ProgramOfWorksWorkspacePage() {
       if (!isManualWorkspace && activeEstimateRef) {
         reportParams.set('estimateId', activeEstimateRef);
       }
-      const [baseRes, adjustmentsRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}/dupa-report?${reportParams.toString()}`),
-        fetch(`/api/projects/${projectId}/dupa-adjustments?estimateRef=${encodeURIComponent(dupaEstimateRef || 'manual')}`),
+      const reportUrl = `/api/projects/${projectId}/dupa-report?${reportParams.toString()}`;
+      const adjustmentsUrl = `/api/projects/${projectId}/dupa-adjustments?estimateRef=${encodeURIComponent(dupaEstimateRef || 'manual')}`;
+      const [baseResult, adjustmentsResult] = await Promise.all([
+        fetchJsonDedup(reportUrl, `dupa-report:${projectId}:${reportParams.toString()}`),
+        fetchJsonDedup(adjustmentsUrl, `dupa-adjustments:${projectId}:${dupaEstimateRef || 'manual'}`),
       ]);
-      const baseJson = await baseRes.json();
-      const adjustmentsJson = await adjustmentsRes.json();
+      const baseRes = baseResult.res;
+      const adjustmentsRes = adjustmentsResult.res;
+      const baseJson = baseResult.data;
+      const adjustmentsJson = adjustmentsResult.data;
 
       if (!baseRes.ok || !baseJson.success) {
         throw new Error(baseJson.error || 'Failed to load DUPA report');
@@ -436,12 +541,19 @@ export default function ProgramOfWorksWorkspacePage() {
         const itemKey = getDupaItemKey(item, index);
         const adjustment = adjustmentMap[itemKey];
         if (!adjustment) return item;
+        const recomputed = recomputeDupaTotals(
+          item,
+          adjustment.laborItems,
+          adjustment.equipmentItems,
+          adjustment.materialItems,
+          adjustment.totals,
+        );
         return {
           ...item,
-          laborItems: adjustment.laborItems,
-          equipmentItems: adjustment.equipmentItems,
-          materialItems: adjustment.materialItems,
-          totals: adjustment.totals,
+          laborItems: recomputed.laborItems,
+          equipmentItems: recomputed.equipmentItems,
+          materialItems: recomputed.materialItems,
+          totals: recomputed.totals,
         };
       });
 
@@ -547,8 +659,8 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       if (!isManualWorkspace && activeEstimateRef) {
         params.set('estimateId', activeEstimateRef);
       }
-      const res = await fetch(`/api/projects/${projectId}/pow-adjustments?${params.toString()}`);
-      const data = await res.json();
+      const requestUrl = `/api/projects/${projectId}/pow-adjustments?${params.toString()}`;
+      const { res, data } = await fetchJsonDedup(requestUrl, `pow-adjustments:${projectId}:${params.toString()}`);
       if (!res.ok || !data.success) {
         setPowAdjustments({});
         return;
@@ -633,12 +745,10 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       throw new Error(data.error || 'Failed to save DUPA adjustment');
     }
 
-    await Promise.all([
-      loadDupaReport(),
-      isManualWorkspace ? loadManualBoq({ silent: true }) : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve()),
-      loadPowAdjustments(),
-      loadPrescribedBreakdown(),
-    ]);
+    const refreshEstimateOrBoq = isManualWorkspace
+      ? loadManualBoq({ silent: true })
+      : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve());
+    await Promise.all([loadDupaReport(), refreshEstimateOrBoq, loadPowAdjustments(), loadPrescribedBreakdown()]);
 
     setAdjustmentNotice('DUPA changes saved to canonical values.');
     window.setTimeout(() => setAdjustmentNotice(null), 2200);
@@ -667,12 +777,10 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       throw new Error(data.error || 'Failed to reset DUPA adjustment');
     }
 
-    await Promise.all([
-      loadDupaReport(),
-      isManualWorkspace ? loadManualBoq({ silent: true }) : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve()),
-      loadPowAdjustments(),
-      loadPrescribedBreakdown(),
-    ]);
+    const refreshEstimateOrBoq = isManualWorkspace
+      ? loadManualBoq({ silent: true })
+      : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve());
+    await Promise.all([loadDupaReport(), refreshEstimateOrBoq, loadPowAdjustments(), loadPrescribedBreakdown()]);
   };
 
   const transformToEquipment = (estimate: any): Equipment[] => {
@@ -681,7 +789,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
     lines.forEach((item: any) => {
       item.equipmentItems?.forEach((eq: any) => {
-        const name = eq.description || 'Unnamed Equipment';
+        const name = eq.completeDescription || eq.description || 'Unnamed Equipment';
         const currentQty = equipmentMap.get(name) || 0;
         equipmentMap.set(name, currentQty + eq.noOfUnits);
       });
@@ -1302,7 +1410,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                       <DupaWorkspaceTab
                         data={dupaData}
                         formatCurrency={(value) => `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        formatNumber={(value) => value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        formatNumber={(value) => value.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                         selectedPrintKey={selectedDupaPrintKey}
                         onSelectedPrintKeyChange={setSelectedDupaPrintKey}
                         readOnly={!canModifyPow}

@@ -91,7 +91,10 @@ export default function NewDUPATemplatePage() {
         ]);
         const [eqJson, matJson, payJson] = await Promise.all([eqRes.json(), matRes.json(), payRes.json()]);
         if (eqJson.success) {
-          const options = eqJson.data.map((e: any) => ({ _id: e._id, description: e.description }));
+          const options = eqJson.data.map((e: any) => ({
+            _id: e._id,
+            description: e.completeDescription || e.description,
+          }));
           setEquipmentOptions(options);
           setBaseEquipmentOptions(options);
         }
@@ -237,7 +240,10 @@ export default function NewDUPATemplatePage() {
       const response = await fetch(`/api/master/equipment?search=${encodeURIComponent(trimmedQuery)}`);
       const data = await response.json();
       if (data.success) {
-        setEquipmentOptions(data.data.map((e: any) => ({ _id: e._id, description: e.description })));
+        setEquipmentOptions(data.data.map((e: any) => ({
+          _id: e._id,
+          description: e.completeDescription || e.description,
+        })));
       }
     } catch (error) {
       console.error('Failed to search equipment', error);
@@ -469,8 +475,8 @@ export default function NewDUPATemplatePage() {
                   type="number"
                   value={outputPerHour}
                   onChange={(e) => setOutputPerHour(Number(e.target.value))}
-                  min="0.01"
-                  step="0.01"
+                  min="0.001"
+                  step="0.001"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>

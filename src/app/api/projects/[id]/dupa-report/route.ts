@@ -104,16 +104,17 @@ export async function GET(
         const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
         const materialsSubmitted = (item.materialItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
-        const ocmValue = typeof item.ocmCost === 'number'
-          ? item.ocmCost
-          : directUnitPlusMaterialsSubmitted * (Number(item.ocmPercentage || 0) / 100);
-        const cpValue = typeof item.cpCost === 'number'
-          ? item.cpCost
-          : directUnitPlusMaterialsSubmitted * (Number(item.cpPercentage || 0) / 100);
-        const vatValue = typeof item.vatCost === 'number'
-          ? item.vatCost
-          : (directUnitPlusMaterialsSubmitted + ocmValue + cpValue) * (Number(item.vatPercentage || 0) / 100);
-        const totalUnitCostSubmitted = item.totalCost || (directUnitPlusMaterialsSubmitted + ocmValue + cpValue + vatValue);
+        const ocmPercent = Number(item.ocmPercentage || 0);
+        const cpPercent = Number(item.cpPercentage || 0);
+        const vatPercent = Number(item.vatPercentage || 0);
+
+        // Always derive indirect costs at unit level from percentage inputs.
+        // This keeps DUPA display consistent with workspace recomputation and
+        // avoids mixing potentially stale/non-unit stored absolute costs.
+        const ocmValue = directUnitPlusMaterialsSubmitted * (ocmPercent / 100);
+        const cpValue = directUnitPlusMaterialsSubmitted * (cpPercent / 100);
+        const vatValue = (directUnitPlusMaterialsSubmitted + ocmValue + cpValue) * (vatPercent / 100);
+        const totalUnitCostSubmitted = directUnitPlusMaterialsSubmitted + ocmValue + cpValue + vatValue;
 
         return {
           dupaItemId,
@@ -134,7 +135,7 @@ export async function GET(
             amount: row.amount || 0,
           })),
           equipmentItems: (item.equipmentItems || []).map((row: any) => ({
-            description: row.description || '',
+            description: row.completeDescription || row.description || '',
             noOfUnits: row.noOfUnits || 0,
             noOfHours: row.noOfHours || 0,
             hourlyRate: row.hourlyRate || 0,
@@ -155,11 +156,11 @@ export async function GET(
             directUnitCostSubmitted,
             materialsSubmitted,
             directUnitPlusMaterialsSubmitted,
-            ocmPercent: Number(item.ocmPercentage || 0),
+            ocmPercent,
             ocmValue,
-            cpPercent: Number(item.cpPercentage || 0),
+            cpPercent,
             cpValue,
-            vatPercent: Number(item.vatPercentage || 0),
+            vatPercent,
             vatValue,
             totalUnitCostSubmitted,
           },

@@ -106,7 +106,10 @@ export default function EditDUPATemplatePage() {
 
       // Load master data
       const equipmentOptionsData = eqJson.success
-        ? eqJson.data.map((e: any) => ({ _id: e._id, description: e.description }))
+        ? eqJson.data.map((e: any) => ({
+          _id: e._id,
+          description: e.completeDescription || e.description,
+        }))
         : [];
       if (eqJson.success) {
         setEquipmentOptions(equipmentOptionsData);
@@ -146,7 +149,12 @@ export default function EditDUPATemplatePage() {
         if (template.equipmentTemplate && template.equipmentTemplate.length > 0) {
           const equipmentTemplateWithIds = template.equipmentTemplate.map((entry: EquipmentEntry) => {
             if (entry.equipmentId || !entry.description) return entry;
-            const matched = equipmentOptionsData.find((opt: { _id: string; description: string }) => opt.description === entry.description);
+            const matched = equipmentOptionsData.find((opt: { _id: string; description: string }) => {
+              const existing = String(entry.description || '').trim().toLowerCase();
+              const option = String(opt.description || '').trim().toLowerCase();
+              if (!existing || !option) return false;
+              return option === existing || option.includes(existing) || existing.includes(option);
+            });
             return matched ? { ...entry, equipmentId: matched._id } : entry;
           });
           setEquipmentTemplate(equipmentTemplateWithIds);
@@ -192,7 +200,10 @@ export default function EditDUPATemplatePage() {
       const response = await fetch(`/api/master/equipment?search=${encodeURIComponent(trimmedQuery)}`);
       const data = await response.json();
       if (data.success) {
-        setEquipmentOptions(data.data.map((e: any) => ({ _id: e._id, description: e.description })));
+        setEquipmentOptions(data.data.map((e: any) => ({
+          _id: e._id,
+          description: e.completeDescription || e.description,
+        })));
       }
     } catch (error) {
       console.error('Failed to search equipment', error);
@@ -471,11 +482,11 @@ export default function EditDUPATemplatePage() {
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.001"
                   value={outputPerHour}
                   onChange={(e) => setOutputPerHour(parseFloat(e.target.value) || 1)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min="0.01"
+                  min="0.001"
                 />
               </div>
 

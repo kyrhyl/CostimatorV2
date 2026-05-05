@@ -34,12 +34,19 @@ const MaterialTemplateSchema = z.object({
   quantity: z.number().min(0, 'Quantity must be non-negative'),
 });
 
+const OutputPerHourSchema = z
+  .number()
+  .min(0)
+  .refine((value) => Math.round(value * 1000) === value * 1000, {
+    message: 'Output per hour supports up to 3 decimal places only',
+  });
+
 const DUPATemplateSchema = z.object({
   payItemId: z.string().optional(),
   payItemNumber: z.string().min(1, 'Pay item number is required'),
   payItemDescription: z.string().min(1, 'Description is required'),
   unitOfMeasurement: z.string().min(1, 'Unit of measurement is required'),
-  outputPerHour: z.number().min(0).default(1.0),
+  outputPerHour: OutputPerHourSchema.default(1.0),
   laborTemplate: z.array(LaborTemplateSchema).default([]),
   equipmentTemplate: z.array(EquipmentTemplateSchema).default([]),
   materialTemplate: z.array(MaterialTemplateSchema).default([]),

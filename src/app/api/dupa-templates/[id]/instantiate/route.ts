@@ -280,7 +280,7 @@ export async function POST(
             const equipment: any = await Equipment.findById(equip.equipmentId).lean();
             if (equipment) {
               hourlyRate = equipment.hourlyRate || 0;
-              description = equipment.description || equipment.completeDescription || description;
+              description = equipment.completeDescription || equipment.description || description;
               equipmentId = equipment._id;
             }
           }

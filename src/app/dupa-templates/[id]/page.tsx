@@ -152,7 +152,7 @@ export default function ViewDUPATemplatePage() {
               <label className="block text-sm font-medium text-gray-700">
                 Output Per Hour
               </label>
-              <p className="mt-1 text-gray-900">{template.outputPerHour}</p>
+              <p className="mt-1 text-gray-900">{Number(template.outputPerHour || 0).toFixed(3)}</p>
             </div>
             {template.part && (
               <div>
