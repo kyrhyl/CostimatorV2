@@ -1,0 +1,119 @@
+EQUIPMENT,DESCRIPTION,MODEL,CAPACITY,FLYWHEEL HORSEPOWER,Fixed Price,Base Price
+Bulldozer,Bulldozer,DX175,-,167," ?3,824.00 ","3,212.00"
+Bulldozer w/ Ripper,Bulldozer w/ Ripper,DX175,-,167," ?4,397.60 ","3,693.80"
+Payloader,Payloader,LX80-2C,1.50 cu.m./1.95 cu.yd,110," ?1,733.00 ","1,455.00"
+Motorized Road Grader,Motorized Road Grader,G710B,-,163," ?3,298.00 ","2,770.00"
+Motorized Road Grader w/ Scarifier,Motorized Road Grader w/ Scarifier,G710B,-,163," ?3,792.70 ","3,186.50"
+Pneumatic Tire Roller,Pneumatic Tire Roller,"9-WHL, 9.00X20, 4PR",10 mt,107, ?589.00 ,557
+Vibratory Roller,Vibratory Roller,SD100DC,10 mt,125," ?1,939.00 ","1,730.00"
+Tandem Steel Roller,Tandem Steel Roller,HD110,11 mt,134," ?2,164.00 ","1,930.00"
+Plate Compactor,Plate Compactor,400-500 GASOLINE ENGINE,0,5, ?129.25 ,129.25
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,6-10 mt,100, ?860.00 ,806
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,21-25 mt,145," ?1,918.00 ","1,797.00"
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,36-40 mt,190," ?2,397.00 ","2,246.00"
+"Crawler Crane w/ Bucket, Standard Boom","Crawler Crane w/ Bucket, Standard Boom",ALL MODELS,36-40 mt,190," ?2,876.40 ","2,540.00"
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,41-45 mt,190," ?2,711.00 ","2,540.00"
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,51-60 mt,275," ?3,500.00 ","3,280.00"
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,61-70 mt,275," ?4,501.00 ","4,218.00"
+"Crawler Crane, Standard Boom","Crawler Crane, Standard Boom",ALL MODELS,71- 80 mt,285," ?4,530.00 ","4,245.00"
+"Truck Mounted Crane, Standard Lattice Boom","Truck Mounted Crane, Standard Lattice Boom",ALL MODELS,6-10 mt,100, ?794.00 ,636
+"Truck Mounted Crane, Standard Lattice Boom","Truck Mounted Crane, Standard Lattice Boom",ALL MODELS,21-25 mt,200," ?1,691.00 ","1,522.00"
+"Truck Mounted Crane, Standard Lattice Boom","Truck Mounted Crane, Standard Lattice Boom",ALL MODELS,31-35 mt,238," ?2,055.00 ","1,849.00"
+"Truck Mounted Crane, Standard Lattice Boom","Truck Mounted Crane, Standard Lattice Boom",ALL MODELS,41-45 mt,246," ?2,344.00 ","2,110.00"
+"Truck Mounted Crane w/ Bucket, Standard Lattice Boom","Truck Mounted Crane w/ Bucket, Standard Lattice Boom",ALL MODELS,41-45 mt,246," ?2,812.80 ","2,532.00"
+"Truck Mounted Crane, Standard Lattice Boom","Truck Mounted Crane, Standard Lattice Boom",ALL MODELS,51-60 mt,280," ?3,283.00 ","2,955.00"
+"Truck Mounted Crane, Hydraulic Telescopic Boom","Truck Mounted Crane, Hydraulic Telescopic Boom",ALL MODELS,2-5 mt,100, ?718.00 ,576
+Topless Tower Crane,Topless Tower Crane,MDT 98-1.2M,55MX6T/1.2T,0," ?5,851.00 ","5,851.00"
+Topless Tower Crane,Topless Tower Crane,MDT 128,55MX6T/1.6T,0," ?7,857.00 ","7,857.00"
+Topless Tower Crane,Topless Tower Crane,MDT 132 G8,55MX8T/1.6T,0," ?8,092.00 ","8,092.00"
+Topless Tower Crane,Topless Tower Crane,MDT 162 H8,60MX8T/1.8T,0," ?8,363.00 ","8,363.00"
+Topless Tower Crane,Topless Tower Crane,MDT 178,60MX8T/1.5T,0," ?8,906.00 ","8,906.00"
+Topless Tower Crane,Topless Tower Crane,MDT 192-H12,60MX1.2T/2.2T,0," ?9,127.00 ","9,127.00"
+"Aerial Lift, Self Propelled, Scissor Lift","Aerial Lift, Self Propelled, Scissor Lift",GS4080 GAS/DIESEL DRIVEN,40 ft hts x 46 ft range,60," ?1,455.00 ","1,455.00"
+"Straight Boom Lift, Telescopic (Gas/ Diesel)","Straight Boom Lift, Telescopic (Gas/ Diesel)",60H,1000 lb x 60'ht x 66'range,43," ?1,373.00 ","1,373.00"
+Backhoe,Backhoe,HD820 III,0.80 cu.m./ 1.05 yd3,150," ?2,543.00 ","1,685.00"
+Backhoe with Breaker,Backhoe with Breaker,HD820 III,0.80 cu.m./ 1.05 yd4,150," ?3,305.90 ","2,190.50"
+"Backhoe, Wheel Mounted","Backhoe, Wheel Mounted",PW60N-1,0.28 cu.m./0.37yd3,50," ?1,354.00 ",806
+Diesel Hammer,Diesel Hammer,K25-DSL,7500 kg-m,0," ?1,681.00 ","1,681.00"
+Vibro Hammer,Vibro Hammer,"VIBRO FONCEUR, PTC25H1A",45000 kg-m,272.22," ?3,222.00 ","2,707.00"
+Vibro Hammer,Vibro Hammer,MHF12 W/ HYD. POWER PACK,120kN-m,222," ?4,324.00 ","3,632.00"
+Vibro Hammer,Vibro Hammer,DPD600T HYDRAULIC PILE DRIVER,60 ton,201," ?2,229.00 ","1,873.00"
+Drilling Rig,Drilling Rig,"C.M.V. TH18/65, 2000mm? 65m depth & 18000kg-m DRILL TORQUE",0,300," ?13,900.00 ","11,676.00"
+Asphalt Ditributor,Asphalt Ditributor,ROSCO/5 TON,3000 USG,100, ?983.00 ,826
+Asphalt Paver,Asphalt Paver,NF220BIIVDM,0,80," ?1,924.00 ","1,616.00"
+Cold Milling Machine,Cold Milling Machine,"W130F, milling width 1300 mm max depth 300 mm",0,304," ?7,498.00 ","5,875.00"
+Cold Milling Machine,Cold Milling Machine,"100, TCD 2012 L06 2V, milling width 1 meter max depth 300mm",0,211," ?5,580.00 ","4,687.00"
+Concrete Paver,Concrete Paver,"COMMANDER III, FOUR-TRACK",0,169," ?7,103.00 ","5,967.00"
+Concrete Screeder,Concrete Screeder,WACKER TRUSS SCREED,0,5.5, ?572.00 ,480
+One Bagger Mixer,One Bagger Mixer,,4-6 cu.ft./min,0, ?180.00 ,180
+Transit Mixer,Transit Mixer,ALL MODELS,5 cu.ft./min,175," ?1,534.00 ","1,288.00"
+Concrete Pump,Concrete Pump,"DIESEL DRIVEN, TRAILER-MOUNTED LESS PIPE",100 cu.ft./min,130," ?2,180.00 ","1,831.00"
+Grouting Machine,Grouting Machine,"GARNER DENVER 6X3X6, AIR DRIVEN","GARNER DENVER 6X3X6, Air Driven",0, ?909.63 ,909.63
+Dump Truck,DUMP TRUCK,ALL MODELS,12 cu. yd.,290," ?1,491.00 ","1,252.00"
+Cargo/Service Truck,Cargo/Service Truck,ALL MODELS,2-5 mt,160, ?822.00 ,628
+Boom Truck,Boom Truck,NXG1160D3ZAL1X,0,197," ?2,027.00 ","1,762.00"
+Cargo/Service Truck,CARGO TRUCK,ALL MODELS,9-10 mt,270," ?1,373.00 ",972
+Water Truck/Pump,WATER TRUCK,ALL MAKES,16000 L,360," ?2,572.00 ","2,161.00"
+Air Compressor,Air Compressor,ALL MODELS,15-35 cfm,20, ?215.00 ,172
+Air Compressor,Air Compressor,ALL MODELS,126-160 cfm,51, ?473.00 ,379
+Air Compressor,Air Compressor,ALL MODELS,161-185 cfm,69, ?527.00 ,422
+Air Compressor,Air Compressor,ALL MODELS,356-450 cfm,130," ?1,013.00 ",810
+Diamond Drill (CP-8),Diamond Drill (CP-8),CP-8,0,0, ?211.25 ,211.25
+Diamond Drill (CP-55A),Diamond Drill (CP-55A),CP-55A,0,0, ?242.50 ,242.5
+Jackhammer,Jackhammer,,0,0, ?167.30 ,167.3
+Pneumatic Drilling Machine,Pneumatic Drilling Machine,,0,0, ?170.00 ,170
+"Water Pump, 100 mm suction ?","Water Pump, 100 mm suction ?",1800,0,7.5, ?129.50 ,129.5
+"Water Pump, 100 mm suction ?","Water Pump, 100 mm suction ?",2667,50,16, ?266.25 ,266.25
+Generator Set,Generator Set,ALL MAKES,5kW/6kVA,0, ?181.16 ,181.16
+Generator Set,Generator Set,ALL MAKES,40kW/50kVA,0, ?306.87 ,306.87
+Generator Set,Generator Set,ALL MAKES,300kW/375kVA,0," ?1,173.14 ",733.22
+Generator Set,Generator Set,ALL MAKES,700kW/875kVA,0," ?2,885.94 ","1,803.71"
+Generator Set,Generator Set,ALL MAKES,900kW/1125kVA,0," ?3,574.28 ","2,233.93"
+Welding Machine,Welding Machine,GAS/DIESEL DRIVEN,300,48,371.00,327
+Welding Machine,Welding Machine,GAS/DIESEL DRIVEN,500,70,539.00,476
+Welding Machine,Welding Machine,ELECTRIC DRIVEN/DC OUTPUT,500,0,391.00,391
+Portable Breaker,Portable Breaker,"WACKER PORTABLE PETROL BREAKER, BHF30S",,4, ?162.53 ,86.25
+Chainsaw,Chainsaw,"HUSQVARNA 2100 CD with CR22, 7 ft Reach, 9 in Standard Blade",,0, ?77.05 ,77.05
+Concrete Vibrator,Concrete Vibrator,"Flexible Shaft Type 2"" Head dia. With 5A Gasoline Drive Unit",,0, ?60.03 ,60.03
+Concrete Saw,Concrete Saw,"14"" BIade a with 4 3/4"" Cutting Depth",,7.5, ?34.27 ,34.27
+Bar Cutter,Bar Cutter,"25mm Maxi Rebar dia. (Grade40), Single Phase",,0, ?110.74 ,110.74
+Bar Bender,Bar Bender,"25 mm Maximum Rebar ®, Three Phase",,0, ?177.19 ,177.19
+Tower Lights,Tower Lights,"Tower Height =28ft, No. of Lights  = 4 x 1000 watts, Generator = 5 kw",,10.5, ?273.90 ,273.9
+Joint sealer Machine,Joint sealer Machine,Gas or Diesel Driven w/ Hot or Cold spray nozzle,,0, ?94.70 ,94.7
+Asphalt Concrete Plant,Asphalt Concrete Plant,"Complete with: Cold Feed System, bins, feeder and collecting 
+conveyors. Drying and Burner System, feed conveyors drum and fully modulating burner. Fuel feed system. Screening-Weighing-Mixing
+System, hot elevator, vibrating screen, hot bins, weighing scale and
+twinshaft pugmill mixer. Dust collection and filler feeding system,
+bag filter and exhaust fan. Thennal Hot Oil System, delivery pump
+and heater and Computerized Plant Control System.",0,0,4286.63,"4,286.63"
+Concrete Batch Plant,Concrete Batch Plant,"Complete with: Cement silo and screw conveyor system. Water and
+supply system. Aggregate storage bins with vibrators and conveyors
+system. Weigh hopper with electronic Ioadcell for aggregates,
+cement, water and admixture. Central twinshaft mixer. Hydraulic
+System and Computerized Plant Control System.",0,0," ?1,973.04 ","1,973.04"
+Power Broom,Power Broom,Towed Type with Engine 2 m wide 6-30 km/h sweeping capacity,Towed Type with Engine 2 in wide 6-30 kin/h sweeping capacity,0, ?219.30 ,219.3
+Hydroseeding Machine,Hydroseeding Machine,,0,0, ?952.00 ,952
+Applicator Machine,Applicator Machine,,0,0, ?180.82 ,180.82
+Kneading Machine,Kneading Machine,,0,0, ?173.30 ,173.3
+Cutting Outfit,Cutting Outfit,,0,0, ?45.45 ,45.45
+Steel Wheel with Nylon Rope,Steel Wheel with Nylon Rope,,0,0, ?300.00 ,300
+Improvised Bamboo w/ Bucket,Improvised Bamboo w/ Bucket,,0,0, ?200.00 ,200
+Asphalt Kettle/Drum,Asphalt Kettle/Drum,,0,0, ?203.82 ,203.82
+SPT & Desanding Machine,SPT & Desanding Machine,,0,0, ?559.00 ,559
+Drop Hammer,Drop Hammer,,0,0, ?200.00 ,200
+Drop Hammer w/ accessories,Drop Hammer w/ accessories,,0,0," ?5,000.00 ","5,000.00"
+1 Air Compressor w/ 2 Jack Hammer,1 Air Compressor w/ 2 Jack Hammer,,0,0," ?1,265.00 ","1,265.00"
+Bentonite Bin,Bentonite Bin,,0,0, ?280.00 ,280
+Bentonite Mixer,Bentonite Mixer,,0,0, ?173.00 ,173
+Tremie Pipe Set,Tremie Pipe Set,,0,0, ?320.00 ,320
+Pile Integrity Testing & accessories (inlcudes professional fee of Structural Engineer & reports),Pile Integrity Testing & accessories (inlcudes professional fee of Structural Engineer & reports),,0,0," ?65,000.00 ","65,000.00"
+Dynamic Pile Testing (includes professional fee of Structural Engineer & reports),Dynamic Pile Testing (includes professional fee of Structural Engineer & reports),,0,0," ?103,000.00 ","103,000.00"
+Pile Integrity Testing & accessories (includes professional fee of Structural Engineer & reports),Pile Integrity Testing & accessories (includes professional fee of Structural Engineer & reports),,0,0," ?37,000.00 ","37,000.00"
+Grinding Machine & accessories,Grinding Machine & accessories,,0,0, ?163.82 ,163.82
+Stressing (Jack) Machine,Stressing (Jack) Machine,,0,0," ?2,500.00 ","2,500.00"
+Dolly,Dolly,,0,0," ?1,249.00 ","1,249.00"
+Wood/Steel Ladder,Wood/Steel Ladder,,0,0, ?112.91 ,112.91
+Air Compressor ,Air Compressor ,,0,103, ?866.25 ,
+Drilling Machine Dry Type,Drilling Machine Dry Type,,0,0, ?375.00 ,
+Pull Out Tester ,Pull Out Tester ,,50 tons Capacity,0," ?1,250.00 ",
+Power Spray,Power Spray,,0,0, ?187.50 ,

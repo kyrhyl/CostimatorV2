@@ -19,8 +19,8 @@ const UpdateEquipmentSchema = z.object({
   equipmentModel: z.string().optional(),
   capacity: z.string().optional(),
   flywheelHorsepower: z.number().min(0).optional(),
-  rentalRate: z.number().min(0, 'Rental rate must be non-negative').optional(),
-  hourlyRate: z.number().min(0, 'Hourly rate must be non-negative').optional(),
+  fuelConsumptionAvgLph: z.number().min(0).optional(),
+  lubeConsumptionAvgLph: z.number().min(0).optional(),
 });
 
 // ============================================================================

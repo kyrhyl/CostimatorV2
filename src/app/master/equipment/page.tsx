@@ -10,19 +10,46 @@ interface Equipment {
   equipmentModel?: string;
   capacity?: string;
   flywheelHorsepower?: number;
-  rentalRate: number;
-  hourlyRate: number;
+  fuelConsumptionAvgLph?: number;
+  lubeConsumptionAvgLph?: number;
+  basePrice?: number;
+  fuelCost?: number;
+  lubeCost?: number;
+  calculatedRate?: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export default function EquipmentPage() {
+  const DEFAULT_FUEL_PRICE = 90;
+  const DEFAULT_LUBE_PRICE = 280;
+
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [editionOptions, setEditionOptions] = useState<string[]>([]);
+  const [scenarioOptions, setScenarioOptions] = useState<Array<{ name: string; fuelPricePerLiter: number; lubePricePerLiter: number; updatedAt?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [minRate, setMinRate] = useState('');
-  const [maxRate, setMaxRate] = useState('');
+  const [rateEdition, setRateEdition] = useState('');
+  const [tableMode, setTableMode] = useState<'fixed' | 'variable' | 'database'>('database');
+  const [scenarioName, setScenarioName] = useState('BASE');
+  const [newScenarioName, setNewScenarioName] = useState('BASE');
+  const [fuelPricePerLiter, setFuelPricePerLiter] = useState(String(DEFAULT_FUEL_PRICE));
+  const [lubePricePerLiter, setLubePricePerLiter] = useState(String(DEFAULT_LUBE_PRICE));
+  const [showAcelCsvImport, setShowAcelCsvImport] = useState(false);
+  const [acelCsvFile, setAcelCsvFile] = useState<File | null>(null);
+  const [acelCsvEdition, setAcelCsvEdition] = useState('');
+  const [acelCsvSubmitting, setAcelCsvSubmitting] = useState(false);
+
+  const suggestedEditionName = (() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const start = new Date(Date.UTC(year, 0, 1));
+    const current = new Date(Date.UTC(year, now.getMonth(), now.getDate()));
+    const dayMs = 24 * 60 * 60 * 1000;
+    const week = Math.ceil((((current.getTime() - start.getTime()) / dayMs) + start.getUTCDay() + 1) / 7);
+    return `ACEL-27TH-${year}W${String(week).padStart(2, '0')}`;
+  })();
   const [showForm, setShowForm] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
@@ -34,33 +61,101 @@ export default function EquipmentPage() {
   const [formData, setFormData] = useState({
     no: 0,
     completeDescription: '',
-    description: '',
     equipmentModel: '',
     capacity: '',
     flywheelHorsepower: 0,
-    rentalRate: 0,
-    hourlyRate: 0,
+    fuelConsumptionAvgLph: 0,
+    lubeConsumptionAvgLph: 0,
   });
+
+  const formatCurrency = (value: number) =>
+    `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const formatLph = (value: number) =>
+    Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
   useEffect(() => {
     fetchEquipment();
-  }, [searchTerm, minRate, maxRate]);
+  }, [searchTerm, rateEdition, tableMode, scenarioName]);
+
+  useEffect(() => {
+    fetchEditions();
+  }, []);
+
+  useEffect(() => {
+    if (tableMode !== 'variable') return;
+    if (!rateEdition.trim()) return;
+    fetchScenarios();
+  }, [tableMode, rateEdition]);
+
+  const rateMode: 'fixed' | 'variable_fuel_lube' = tableMode === 'variable' ? 'variable_fuel_lube' : 'fixed';
+
+  const fetchEditions = async () => {
+    try {
+      const response = await fetch('/api/master/equipment/rates/editions');
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to load editions');
+      }
+      const editions = Array.isArray(result.data) ? result.data : [];
+      setEditionOptions(editions);
+      if (editions.length > 0 && !rateEdition.trim()) {
+        setRateEdition(editions[0]);
+      } else if (editions.length === 0) {
+        setTableMode('database');
+      }
+    } catch {
+      setEditionOptions([]);
+      setTableMode('database');
+    }
+  };
+
+  const fetchScenarios = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.append('equipmentVersion', rateEdition.trim().toUpperCase());
+      params.append('edition', rateEdition.trim().toUpperCase());
+      const response = await fetch(`/api/master/equipment/rates/scenarios?${params.toString()}`);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Failed to load scenarios');
+      const list = Array.isArray(result.data) ? result.data : [];
+      setScenarioOptions(list);
+      if (list.length > 0 && !list.some((s: any) => s.name === scenarioName)) {
+        setScenarioName(list[0].name);
+        setFuelPricePerLiter(String(list[0].fuelPricePerLiter ?? DEFAULT_FUEL_PRICE));
+        setLubePricePerLiter(String(list[0].lubePricePerLiter ?? DEFAULT_LUBE_PRICE));
+      }
+    } catch {
+      setScenarioOptions([]);
+    }
+  };
 
   const fetchEquipment = async () => {
     try {
       setLoading(true);
+      if (tableMode !== 'database' && !rateEdition.trim()) {
+        setEquipment([]);
+        setError('');
+        return;
+      }
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
-      if (minRate) params.append('minRate', minRate);
-      if (maxRate) params.append('maxRate', maxRate);
-      
-      const response = await fetch(`/api/master/equipment?${params}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (tableMode !== 'database' && rateEdition.trim()) {
+        params.append('edition', rateEdition.trim().toUpperCase());
+        params.append('mode', rateMode);
+        if (rateMode === 'variable_fuel_lube') {
+          params.append('equipmentVersion', rateEdition.trim().toUpperCase());
+          params.append('scenario', scenarioName.trim().toUpperCase() || 'BASE');
+        }
       }
       
+      const response = await fetch(`/api/master/equipment?${params}`);
+
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      }
       
       if (result.success) {
         setEquipment(result.data);
@@ -72,6 +167,148 @@ export default function EquipmentPage() {
       setError(err.message || 'Failed to fetch equipment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveScenario = async () => {
+    if (!rateEdition.trim()) {
+      alert('ACEL Edition is required for variable scenarios.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/master/equipment/rates/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentVersion: rateEdition.trim().toUpperCase(),
+          edition: rateEdition.trim().toUpperCase(),
+          name: newScenarioName.trim().toUpperCase() || 'BASE',
+          fuelPricePerLiter: Number(fuelPricePerLiter || 0),
+          lubePricePerLiter: Number(lubePricePerLiter || 0),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to save scenario');
+      }
+      const createdName = String(result.createdName || result.data?.name || scenarioName);
+      setScenarioName(createdName);
+      setNewScenarioName('BASE');
+      alert('Scenario saved successfully.');
+      fetchScenarios();
+      fetchEquipment();
+    } catch (err: any) {
+      alert(err.message || 'Failed to save scenario');
+    }
+  };
+
+  const handleDeleteScenario = async () => {
+    if (!rateEdition.trim() || !scenarioName.trim()) {
+      alert('ACEL Edition and Scenario are required.');
+      return;
+    }
+
+    if (!confirm(`Delete scenario ${scenarioName}? This cannot be undone.`)) return;
+
+    try {
+      const params = new URLSearchParams({
+        equipmentVersion: rateEdition.trim().toUpperCase(),
+        edition: rateEdition.trim().toUpperCase(),
+        name: scenarioName.trim().toUpperCase(),
+      });
+
+      const response = await fetch(`/api/master/equipment/rates/scenarios?${params.toString()}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to delete scenario');
+      }
+
+      const remaining = scenarioOptions.filter((s) => s.name !== scenarioName);
+      setScenarioOptions(remaining);
+      if (remaining.length > 0) {
+        setScenarioName(remaining[0].name);
+        setFuelPricePerLiter(String(remaining[0].fuelPricePerLiter ?? DEFAULT_FUEL_PRICE));
+        setLubePricePerLiter(String(remaining[0].lubePricePerLiter ?? DEFAULT_LUBE_PRICE));
+      } else {
+        setScenarioName('BASE');
+        setFuelPricePerLiter(String(DEFAULT_FUEL_PRICE));
+        setLubePricePerLiter(String(DEFAULT_LUBE_PRICE));
+      }
+
+      alert('Scenario deleted successfully.');
+      fetchEquipment();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete scenario');
+    }
+  };
+
+  const handleUpdateScenario = async () => {
+    if (!rateEdition.trim() || !scenarioName.trim()) {
+      alert('ACEL Edition and Scenario are required.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/master/equipment/rates/scenarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentVersion: rateEdition.trim().toUpperCase(),
+          edition: rateEdition.trim().toUpperCase(),
+          name: scenarioName.trim().toUpperCase(),
+          fuelPricePerLiter: Number(fuelPricePerLiter || 0),
+          lubePricePerLiter: Number(lubePricePerLiter || 0),
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to update scenario');
+      }
+
+      alert('Scenario updated successfully.');
+      fetchScenarios();
+      fetchEquipment();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update scenario');
+    }
+  };
+
+  const handleImportAcelCsv = async () => {
+    if (!acelCsvFile || !acelCsvEdition.trim()) {
+      alert('Please provide CSV file and edition.');
+      return;
+    }
+
+    try {
+      setAcelCsvSubmitting(true);
+      const formData = new FormData();
+      formData.append('file', acelCsvFile);
+      formData.append('edition', acelCsvEdition.trim().toUpperCase());
+
+      const response = await fetch('/api/master/equipment/rates/import-csv', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to import ACEL CSV');
+      }
+      alert(`${result.message}\nRows: ${result.summary?.parsedRows || 0}, Fixed: ${result.summary?.fixedRatesUpserted || 0}, Variable: ${result.summary?.variableRatesUpserted || 0}`);
+      setShowAcelCsvImport(false);
+      const importedEdition = acelCsvEdition.trim().toUpperCase();
+      setRateEdition(importedEdition);
+      setAcelCsvFile(null);
+      setAcelCsvEdition('');
+      fetchEditions();
+      fetchEquipment();
+    } catch (err: any) {
+      alert(err.message || 'Failed to import ACEL CSV');
+    } finally {
+      setAcelCsvSubmitting(false);
     }
   };
 
@@ -88,7 +325,7 @@ export default function EquipmentPage() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, description: formData.completeDescription }),
       });
       
       if (!response.ok) {
@@ -150,12 +387,11 @@ export default function EquipmentPage() {
     setFormData({
       no: eq.no,
       completeDescription: eq.completeDescription,
-      description: eq.description,
       equipmentModel: eq.equipmentModel || '',
       capacity: eq.capacity || '',
       flywheelHorsepower: eq.flywheelHorsepower || 0,
-      rentalRate: eq.rentalRate,
-      hourlyRate: eq.hourlyRate,
+      fuelConsumptionAvgLph: eq.fuelConsumptionAvgLph || 0,
+      lubeConsumptionAvgLph: eq.lubeConsumptionAvgLph || 0,
     });
     setShowForm(true);
   };
@@ -188,12 +424,11 @@ export default function EquipmentPage() {
     setFormData({
       no: 0,
       completeDescription: '',
-      description: '',
       equipmentModel: '',
       capacity: '',
       flywheelHorsepower: 0,
-      rentalRate: 0,
-      hourlyRate: 0,
+      fuelConsumptionAvgLph: 0,
+      lubeConsumptionAvgLph: 0,
     });
   };
 
@@ -209,53 +444,71 @@ export default function EquipmentPage() {
       </div>
 
       {/* Filters and Actions */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search Equipment
+      <div className="bg-white rounded-lg shadow-md p-4 mb-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setTableMode('fixed')}
+            className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border ${tableMode === 'fixed' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-700 border-blue-300'}`}
+          >
+            Fixed Rates
+          </button>
+          <button
+            onClick={() => setTableMode('variable')}
+            className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border ${tableMode === 'variable' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300'}`}
+          >
+            Variable Rates
+          </button>
+          <button
+            onClick={() => setTableMode('database')}
+            className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border ${tableMode === 'database' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-700 border-slate-300'}`}
+          >
+            Equipment Database
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3 items-end">
+          <div className="md:col-span-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Search Equipment Description
             </label>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search description..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Min Hourly Rate
+
+          <div className="md:col-span-3">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              ACEL Edition
             </label>
-            <input
-              type="number"
-              step="0.01"
-              value={minRate}
-              onChange={(e) => setMinRate(e.target.value)}
-              placeholder="₱0.00"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-            />
+            <select
+              value={rateEdition}
+              onChange={(e) => setRateEdition(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+            >
+              {editionOptions.length === 0 ? (
+                <option value="">No edition available</option>
+              ) : (
+                editionOptions.map((edition) => (
+                  <option key={edition} value={edition}>{edition}</option>
+                ))
+              )}
+            </select>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Max Hourly Rate
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={maxRate}
-              onChange={(e) => setMaxRate(e.target.value)}
-              placeholder="₱9999.99"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div className="flex items-end gap-2">
+
+          <div className="md:col-span-5 flex items-end gap-2">
+            <button
+              onClick={() => setShowAcelCsvImport(true)}
+              className="flex-1 bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-xs font-semibold"
+            >
+              Import ACEL CSV
+            </button>
             <button
               onClick={() => setShowCsvImport(true)}
-              className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm"
+              className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors text-xs font-semibold"
             >
               Import CSV
             </button>
@@ -265,17 +518,136 @@ export default function EquipmentPage() {
                 resetForm();
                 setShowForm(true);
               }}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+              className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs font-semibold"
             >
               + Add New
             </button>
           </div>
         </div>
+
+        {tableMode === 'variable' && (
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+              <div>
+                <label className="block text-[11px] font-semibold text-amber-800 mb-1">Equipment Version</label>
+                <input
+                  value={rateEdition.trim().toUpperCase()}
+                  disabled
+                  className="w-full px-2.5 py-2 border border-amber-300 rounded-md text-sm bg-amber-100 text-amber-900"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-800 mb-1">Scenario</label>
+                <select
+                  value={scenarioName}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setScenarioName(next);
+                    const selected = scenarioOptions.find((s) => s.name === next);
+                    if (selected) {
+                      setFuelPricePerLiter(String(selected.fuelPricePerLiter ?? DEFAULT_FUEL_PRICE));
+                      setLubePricePerLiter(String(selected.lubePricePerLiter ?? DEFAULT_LUBE_PRICE));
+                    }
+                  }}
+                  className="w-full px-2.5 py-2 border border-amber-300 rounded-md text-sm"
+                >
+                  {scenarioOptions.length === 0 ? (
+                    <option value="BASE">BASE</option>
+                  ) : (
+                    scenarioOptions.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-800 mb-1">New Scenario Name</label>
+                <input
+                  value={newScenarioName}
+                  onChange={(e) => setNewScenarioName(e.target.value)}
+                  className="w-full px-2.5 py-2 border border-amber-300 rounded-md text-sm"
+                  placeholder="BASE"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-800 mb-1">Fuel Price/L</label>
+                <input type="number" step="0.01" min="0" value={fuelPricePerLiter} onChange={(e) => setFuelPricePerLiter(e.target.value)} className="w-full px-2.5 py-2 border border-amber-300 rounded-md text-sm" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-semibold text-amber-800 mb-1">Lube Price/L</label>
+                <input type="number" step="0.01" min="0" value={lubePricePerLiter} onChange={(e) => setLubePricePerLiter(e.target.value)} className="w-full px-2.5 py-2 border border-amber-300 rounded-md text-sm" />
+              </div>
+              <div className="md:col-span-3 flex gap-2">
+                <button
+                  onClick={handleSaveScenario}
+                  className="w-full bg-amber-600 text-white px-3 py-2 rounded-md hover:bg-amber-700 text-xs font-semibold"
+                >
+                  Save New
+                </button>
+                <button
+                  onClick={handleUpdateScenario}
+                  className="w-full bg-indigo-600 text-white px-3 py-2 rounded-md hover:bg-indigo-700 text-xs font-semibold"
+                >
+                  Update
+                </button>
+                <button
+                  onClick={handleDeleteScenario}
+                  className="w-full bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-xs font-semibold"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="text-sm text-gray-500">
           Total: {equipment.length} equipment item{equipment.length !== 1 ? 's' : ''}
+          {tableMode !== 'database' && rateEdition.trim() && <span className="ml-2">| Edition: <span className="font-semibold">{rateEdition.trim().toUpperCase()}</span></span>}
         </div>
       </div>
+
+      {showAcelCsvImport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold mb-4">Import ACEL Rates (CSV)</h2>
+              <div className="grid grid-cols-1 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Edition *</label>
+                  <input value={acelCsvEdition} onChange={(e) => setAcelCsvEdition(e.target.value)} placeholder="ACEL-27TH-2026W18" className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                  <div className="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                    <span>Suggested:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAcelCsvEdition(suggestedEditionName)}
+                      className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      {suggestedEditionName}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">CSV File *</label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => setAcelCsvFile(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+                <p className="mt-1 text-xs text-gray-500">Use normalized ACEL CSV format (like `resources/ACEL_RATE.csv`).</p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowAcelCsvImport(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700">Cancel</button>
+                <button onClick={handleImportAcelCsv} disabled={acelCsvSubmitting} className="px-4 py-2 bg-emerald-600 text-white rounded-md disabled:opacity-50">
+                  {acelCsvSubmitting ? 'Importing...' : 'Import ACEL CSV'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSV Import Modal */}
       {showCsvImport && (
@@ -401,19 +773,6 @@ export default function EquipmentPage() {
                   />
                 </div>
 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description (Short) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -441,35 +800,35 @@ export default function EquipmentPage() {
                     />
                   </div>
                   
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Rental Rate (₱) *
+                      Fuel Avg Consumption (L/hr)
                     </label>
                     <input
                       type="number"
-                      required
-                      step="0.01"
+                      step="0.0001"
                       min="0"
-                      value={formData.rentalRate}
-                      onChange={(e) => setFormData({ ...formData, rentalRate: parseFloat(e.target.value) || 0 })}
+                      value={formData.fuelConsumptionAvgLph}
+                      onChange={(e) => setFormData({ ...formData, fuelConsumptionAvgLph: parseFloat(e.target.value) || 0 })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hourly Rate (₱) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    step="0.01"
-                    min="0"
-                    value={formData.hourlyRate}
-                    onChange={(e) => setFormData({ ...formData, hourlyRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Lube Avg Consumption (L/hr)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      value={formData.lubeConsumptionAvgLph}
+                      onChange={(e) => setFormData({ ...formData, lubeConsumptionAvgLph: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-3">
@@ -503,6 +862,8 @@ export default function EquipmentPage() {
           <div className="p-8 text-center text-gray-500">Loading equipment...</div>
         ) : error ? (
           <div className="p-8 text-center text-red-600">{error}</div>
+        ) : tableMode !== 'database' && !rateEdition.trim() ? (
+          <div className="p-8 text-center text-gray-500">Select an ACEL edition to view {tableMode === 'fixed' ? 'fixed' : 'variable'} rates.</div>
         ) : equipment.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             No equipment found. Click "Add New" or "Import CSV" to add equipment.
@@ -514,10 +875,23 @@ export default function EquipmentPage() {
                 <tr>
                   <th className="w-16 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">No.</th>
                   <th className="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                  <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
-                  <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>
-                  <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Rental Rate</th>
-                  <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hourly Rate</th>
+                  {tableMode !== 'variable' && <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>}
+                  {tableMode !== 'variable' && <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>}
+                  {tableMode === 'fixed' && <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hourly Rate</th>}
+                  {tableMode === 'variable' && (
+                    <>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Base Price</th>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Fuel Cost</th>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Lubricant Cost</th>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Calculated Rate</th>
+                    </>
+                  )}
+                  {tableMode === 'database' && (
+                    <>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Fuel Avg L/hr</th>
+                      <th className="w-32 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Lube Avg L/hr</th>
+                    </>
+                  )}
                   <th className="w-40 px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
@@ -528,21 +902,41 @@ export default function EquipmentPage() {
                       {eq.no}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="text-sm font-medium text-gray-900 truncate">{eq.description}</div>
-                      <div className="text-xs text-gray-500 truncate">{eq.completeDescription}</div>
+                      <div className="text-sm font-medium text-gray-900 truncate">{eq.completeDescription || eq.description}</div>
                     </td>
-                    <td className="px-3 py-3 text-sm text-gray-500 truncate">
-                      {eq.equipmentModel || '-'}
-                    </td>
-                    <td className="px-3 py-3 text-sm text-gray-500 truncate">
-                      {eq.capacity || '-'}
-                    </td>
-                    <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">
-                      ₱{eq.rentalRate.toFixed(2)}
-                    </td>
-                    <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">
-                      ₱{eq.hourlyRate.toFixed(2)}
-                    </td>
+                    {tableMode !== 'variable' && (
+                      <td className="px-3 py-3 text-sm text-gray-500 truncate">
+                        {eq.equipmentModel || '-'}
+                      </td>
+                    )}
+                    {tableMode !== 'variable' && (
+                      <td className="px-3 py-3 text-sm text-gray-500 truncate">
+                        {eq.capacity || '-'}
+                      </td>
+                    )}
+                    {tableMode === 'fixed' && (
+                      <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">
+                        {formatCurrency(Number((eq as any).hourlyRate || 0))}
+                      </td>
+                    )}
+                    {tableMode === 'variable' && (
+                      <>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.basePrice || 0))}</td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.fuelCost || 0))}</td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.lubeCost || 0))}</td>
+                        <td className="px-3 py-3 text-right text-sm font-semibold text-amber-700 whitespace-nowrap">{formatCurrency(Number(eq.calculatedRate || eq.basePrice || 0))}</td>
+                      </>
+                    )}
+                    {tableMode === 'database' && (
+                      <>
+                        <td className="px-3 py-3 text-right text-sm text-gray-700 whitespace-nowrap">
+                          {formatLph(Number(eq.fuelConsumptionAvgLph || 0))}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-700 whitespace-nowrap">
+                          {formatLph(Number(eq.lubeConsumptionAvgLph || 0))}
+                        </td>
+                      </>
+                    )}
                     <td className="px-3 py-3 text-center text-sm font-medium">
                       <button
                         onClick={() => handleEdit(eq)}

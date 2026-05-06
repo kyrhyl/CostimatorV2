@@ -13,6 +13,7 @@ const ProjectUpdateSchema = z.object({
   projectLocation: z.string().min(1).optional(),
   district: z.string().optional(),
   laborVersion: z.string().optional(),
+  equipmentVersion: z.string().optional(),
   implementingOffice: z.string().optional(),
   appropriation: z.union([z.string(), z.number()]).optional(),
   contractId: z.string().optional(),

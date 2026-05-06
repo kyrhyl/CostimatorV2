@@ -80,6 +80,7 @@ export interface IProject extends Document {
   district: string;
   cmpdVersion?: string; // Selected CMPD version for pricing (e.g., "CMPD-2024-Q1")
   laborVersion?: string; // Selected labor version for pricing (e.g., "LR-2026-Q2")
+  equipmentVersion?: string; // Selected equipment rate version (e.g., "EQ-2026-W18")
   implementingOffice: string;
   appropriation: number;
   contractId?: string;
@@ -520,6 +521,10 @@ const ProjectSchema = new Schema<IProject>(
       default: '',
     },
     laborVersion: {
+      type: String,
+      default: '',
+    },
+    equipmentVersion: {
       type: String,
       default: '',
     },
