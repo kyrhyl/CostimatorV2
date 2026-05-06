@@ -28,6 +28,7 @@ export interface ManualPowConfigForm {
   laborLocation: string;
   district: string;
   cmpdVersion: string;
+  laborVersion: string;
   vatPercentage: number;
   notes: string;
 }

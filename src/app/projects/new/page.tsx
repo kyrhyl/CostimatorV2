@@ -19,9 +19,29 @@ interface LaborRate {
   district?: string;
 }
 
+function formatCurrencyInput(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, '');
+  if (!cleaned) return '';
+
+  const [intPartRaw, ...decParts] = cleaned.split('.');
+  const intPart = intPartRaw.replace(/^0+(?=\d)/, '') || '0';
+  const formattedInt = Number(intPart).toLocaleString('en-US');
+  const decPart = decParts.join('').slice(0, 2);
+
+  return decParts.length > 0 ? `${formattedInt}.${decPart}` : formattedInt;
+}
+
+function parseCurrencyInput(value: string): number | undefined {
+  const normalized = value.replace(/,/g, '').trim();
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export default function NewProjectPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [activeCreateTab, setActiveCreateTab] = useState<'overview' | 'pow'>('overview');
   const [locations, setLocations] = useState<LaborRate[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [cmpdVersions, setCmpdVersions] = useState<string[]>([]);
@@ -130,7 +150,7 @@ export default function NewProjectPage() {
       district,
       cmpdVersion,
       implementingOffice,
-      appropriation: appropriation ? parseFloat(appropriation) : undefined,
+      appropriation: parseCurrencyInput(appropriation),
       contractId,
       projectType,
       powMode,
@@ -209,7 +229,38 @@ export default function NewProjectPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Project Information */}
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Project Information</h2>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Project Information</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Keep overview details minimal, then switch to POW Setup for costing and DPWH fields.
+              </p>
+            </div>
+            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setActiveCreateTab('overview')}
+                className={`px-3 py-2 text-sm font-medium ${
+                  activeCreateTab === 'overview'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Project Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCreateTab('pow')}
+                className={`px-3 py-2 text-sm font-medium border-l border-gray-300 ${
+                  activeCreateTab === 'pow'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                POW Setup
+              </button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -279,6 +330,8 @@ export default function NewProjectPage() {
               />
             </div>
 
+            {activeCreateTab === 'pow' && (
+              <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 CMPD Version
@@ -321,6 +374,23 @@ export default function NewProjectPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Program of Works Mode
+              </label>
+              <select
+                value={powMode}
+                onChange={(e) => setPowMode(e.target.value as 'takeoff' | 'manual')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="takeoff">Takeoff Linked</option>
+                <option value="manual">Manual BOQ Input</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Choose "Manual BOQ Input" for projects where Program of Works entries are encoded directly from DUPA templates.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Implementing Office
               </label>
               <input
@@ -338,10 +408,11 @@ export default function NewProjectPage() {
               </label>
               <input
                 type="text"
+                inputMode="decimal"
                 value={appropriation}
-                onChange={(e) => setAppropriation(e.target.value)}
+                onChange={(e) => setAppropriation(formatCurrencyInput(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                placeholder="e.g., FY 2025 GAA"
+                placeholder="0.00"
               />
             </div>
 
@@ -373,23 +444,6 @@ export default function NewProjectPage() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Program of Works Mode
-              </label>
-              <select
-                value={powMode}
-                onChange={(e) => setPowMode(e.target.value as 'takeoff' | 'manual')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              >
-                <option value="takeoff">Takeoff Linked</option>
-                <option value="manual">Manual BOQ Input</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Choose “Manual BOQ Input” for projects where Program of Works entries will be encoded directly from DUPA templates.
-              </p>
             </div>
 
             <div>
@@ -445,9 +499,13 @@ export default function NewProjectPage() {
                 placeholder="Optional project description"
               />
             </div>
+              </>
+            )}
           </div>
         </div>
 
+        {activeCreateTab === 'pow' && (
+        <>
         {/* Material Hauling Cost */}
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-4">Material Hauling Cost</h2>
@@ -509,6 +567,7 @@ export default function NewProjectPage() {
           <div className="border-b border-gray-200 mb-4">
             <nav className="flex space-x-6" aria-label="DPWH POW tabs">
               <button
+                type="button"
                 onClick={() => setActivePOWTab('projectDetails')}
                 className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
                   activePOWTab === 'projectDetails'
@@ -519,6 +578,7 @@ export default function NewProjectPage() {
                 Project Details
               </button>
               <button
+                type="button"
                 onClick={() => setActivePOWTab('fundSource')}
                 className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
                   activePOWTab === 'fundSource'
@@ -529,6 +589,7 @@ export default function NewProjectPage() {
                 Fund Source
               </button>
               <button
+                type="button"
                 onClick={() => setActivePOWTab('physicalTarget')}
                 className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
                   activePOWTab === 'physicalTarget'
@@ -539,6 +600,7 @@ export default function NewProjectPage() {
                 Physical Target
               </button>
               <button
+                type="button"
                 onClick={() => setActivePOWTab('financial')}
                 className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
                   activePOWTab === 'financial'
@@ -796,6 +858,8 @@ export default function NewProjectPage() {
             )}
           </div>
         </div>
+        </>
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-4">

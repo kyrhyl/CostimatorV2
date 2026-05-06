@@ -111,6 +111,7 @@ export default function Combobox({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen && (event.key === 'ArrowDown' || event.key === 'Enter')) {
+      event.preventDefault();
       setIsOpen(true);
       return;
     }

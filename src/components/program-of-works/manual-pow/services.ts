@@ -23,6 +23,7 @@ export async function saveManualPowConfig(
       laborLocation: configForm.laborLocation,
       district: configForm.district || district || '',
       cmpdVersion: configForm.cmpdVersion,
+      laborVersion: configForm.laborVersion,
       vatPercentage: configForm.vatPercentage,
       notes: configForm.notes,
     },
@@ -70,7 +71,7 @@ export async function saveManualPowDraft(
 
 export async function instantiateDupaTemplate(
   templateId: string,
-  input: { location: string; projectId: string },
+  input: { location: string; projectId: string; district?: string; laborVersion?: string },
 ) {
   const instantiateRes = await fetch(`/api/dupa-templates/${templateId}/instantiate`, {
     method: 'POST',
@@ -101,12 +102,16 @@ export async function createProjectBoqItem(payload: Record<string, unknown>): Pr
 export async function saveStagedManualPowItems(
   projectId: string,
   laborLocation: string,
+  laborVersion: string,
+  district: string,
   stagedTemplates: StagedTemplate[],
 ): Promise<void> {
   for (const staged of stagedTemplates) {
     const computed = await instantiateDupaTemplate(staged._id, {
       location: laborLocation,
       projectId,
+      laborVersion,
+      district,
     });
 
     const payload = {
@@ -158,5 +163,46 @@ export async function deleteProjectBoqItem(itemId: string): Promise<void> {
   const data = (await res.json()) as ManualPowApiResponse;
   if (!res.ok || !data.success) {
     throw new Error(getErrorMessage(data, 'Failed to delete BOQ item'));
+  }
+}
+
+export async function recomputeManualPowItems(
+  projectId: string,
+  items: Array<{ _id: string; templateId: string; quantity: number }>,
+  input: { location: string; district?: string; laborVersion?: string },
+): Promise<void> {
+  for (const item of items) {
+    const computed = await instantiateDupaTemplate(item.templateId, {
+      location: input.location,
+      projectId,
+      district: input.district,
+      laborVersion: input.laborVersion,
+    });
+
+    const patchRes = await fetch(`/api/project-boq/${item._id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        laborComputed: computed.laborComputed,
+        equipmentComputed: computed.equipmentComputed,
+        materialComputed: computed.materialComputed,
+        directCost: computed.directCost,
+        ocmPercentage: computed.ocmPercentage,
+        ocmCost: computed.ocmCost,
+        cpPercentage: computed.cpPercentage,
+        cpCost: computed.cpCost,
+        subtotalWithMarkup: computed.subtotalWithMarkup,
+        vatPercentage: computed.vatPercentage,
+        vatCost: computed.vatCost,
+        totalCost: computed.totalCost,
+        unitCost: computed.unitCost,
+        quantity: item.quantity,
+      }),
+    });
+
+    const patchData = (await patchRes.json()) as ManualPowApiResponse;
+    if (!patchRes.ok || !patchData.success) {
+      throw new Error(getErrorMessage(patchData, `Failed to recompute BOQ item ${item._id}`));
+    }
   }
 }

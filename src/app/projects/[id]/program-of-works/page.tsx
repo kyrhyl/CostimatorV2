@@ -15,6 +15,7 @@ import ProgramOfWorksOverviewSummary from '@/components/program-of-works/Program
 import DigitalSignOffs, { type Signatory } from '@/components/program-of-works/DigitalSignOffs';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
 import type { ProjectBoqItem } from '@/components/program-of-works/manual-pow/types';
+import { recomputeManualPowItems } from '@/components/program-of-works/manual-pow/services';
 import type { DupaReportData } from '@/types/dupa';
 import { derivePartLabel, normalizePart } from '@/lib/utils/dpwh-constants';
 import { fetchJsonDedup } from '@/lib/utils/fetch-json-dedup';
@@ -41,6 +42,7 @@ interface Project {
   projectLocation: string;
   district: string;
   cmpdVersion?: string;
+  laborVersion?: string;
   implementingOffice: string;
   appropriation: number;
   distanceFromOffice?: number;
@@ -72,6 +74,7 @@ interface Project {
   manualPowConfig?: {
     laborLocation?: string;
     cmpdVersion?: string;
+    laborVersion?: string;
     district?: string;
     vatPercentage?: number;
     notes?: string;
@@ -284,6 +287,7 @@ export default function ProgramOfWorksWorkspacePage() {
   const [itemSearch, setItemSearch] = useState('');
   const [dupaData, setDupaData] = useState<DupaReportData | null>(null);
   const [dupaLoading, setDupaLoading] = useState(false);
+  const [dupaRecomputing, setDupaRecomputing] = useState(false);
   const [dupaError, setDupaError] = useState<string | null>(null);
   const [dupaAdjustments, setDupaAdjustments] = useState<Record<string, DupaAdjustmentRecord>>({});
   const [selectedDupaPrintKey, setSelectedDupaPrintKey] = useState<string | null>(null);
@@ -781,6 +785,75 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       ? loadManualBoq({ silent: true })
       : (activeEstimateRef ? loadEstimateDetail(activeEstimateRef) : Promise.resolve());
     await Promise.all([loadDupaReport(), refreshEstimateOrBoq, loadPowAdjustments(), loadPrescribedBreakdown()]);
+  };
+
+  const handleRecomputeDupaFromManualItems = async () => {
+    if (!isManualWorkspace || !canModifyPow) return;
+    if (!manualBoqItems.length) {
+      setAdjustmentNotice('No manual BOQ items to recompute.');
+      window.setTimeout(() => setAdjustmentNotice(null), 2200);
+      return;
+    }
+
+    const laborLocation = project?.manualPowConfig?.laborLocation || project?.district || '';
+    const laborVersion = project?.manualPowConfig?.laborVersion || project?.laborVersion || '';
+    const districtValue = project?.manualPowConfig?.district || project?.district || '';
+
+    if (!laborLocation || !laborVersion) {
+      setAdjustmentNotice('Set Manual POW labor location and labor version first in BOQ Entry settings.');
+      window.setTimeout(() => setAdjustmentNotice(null), 2600);
+      return;
+    }
+
+    const recomputeTargets = manualBoqItems
+      .map((item) => {
+        const rawTemplateId = item.templateId as unknown as string | { _id?: string };
+        const templateId =
+          typeof rawTemplateId === 'string'
+            ? rawTemplateId
+            : typeof rawTemplateId === 'object' && rawTemplateId !== null
+              ? String(rawTemplateId._id || '')
+              : '';
+
+        return {
+          _id: item._id,
+          templateId,
+          quantity: Number(item.quantity || 0),
+        };
+      })
+      .filter((item) => item.templateId);
+
+    if (!recomputeTargets.length) {
+      setAdjustmentNotice('No valid DUPA template references found for recomputation.');
+      window.setTimeout(() => setAdjustmentNotice(null), 2600);
+      return;
+    }
+
+    const missingRefs = manualBoqItems.length - recomputeTargets.length;
+
+    setDupaRecomputing(true);
+    setAdjustmentNotice(null);
+    try {
+      await recomputeManualPowItems(projectId, recomputeTargets, {
+        location: laborLocation,
+        district: districtValue,
+        laborVersion,
+      });
+
+      await Promise.all([loadManualBoq({ silent: true }), loadDupaReport(), loadPowAdjustments(), loadPrescribedBreakdown()]);
+
+      setAdjustmentNotice(
+        missingRefs > 0
+          ? `Recomputed ${recomputeTargets.length} item(s). Skipped ${missingRefs} item(s) with missing template reference.`
+          : 'Recomputed manual BOQ items using current labor/CMPD settings.',
+      );
+      window.setTimeout(() => setAdjustmentNotice(null), 2600);
+    } catch (err: any) {
+      setAdjustmentNotice(err.message || 'Failed to recompute manual BOQ items.');
+      window.setTimeout(() => setAdjustmentNotice(null), 2600);
+    } finally {
+      setDupaRecomputing(false);
+    }
   };
 
   const transformToEquipment = (estimate: any): Equipment[] => {
@@ -1399,8 +1472,31 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 {activeSection === 'dupa-analysis' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-base font-semibold text-gray-900">Detailed Unit Price Analysis</h2>
-                      <span className="text-xs text-gray-500">Compact screen view</span>
+                      <div>
+                        <h2 className="text-base font-semibold text-gray-900">Detailed Unit Price Analysis</h2>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
+                            CMPD: {activeEstimate?.cmpdVersion || project?.manualPowConfig?.cmpdVersion || project?.cmpdVersion || 'N/A'}
+                          </span>
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                            Labor: {activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || 'Latest'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isManualWorkspace && canModifyPow && (
+                          <button
+                            type="button"
+                            onClick={handleRecomputeDupaFromManualItems}
+                            disabled={dupaRecomputing || !manualBoqItems.length}
+                            className="rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            title={manualBoqItems.length ? 'Recompute costs from current labor/CMPD settings' : 'No manual BOQ items to recompute'}
+                          >
+                            {dupaRecomputing ? 'Recomputing...' : 'Recompute Costs'}
+                          </button>
+                        )}
+                        <span className="text-xs text-gray-500">Compact screen view</span>
+                      </div>
                     </div>
                     {dupaLoading ? (
                       <div className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-600">Loading DUPA analysis...</div>
@@ -1419,6 +1515,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                         onResetDupaAdjustment={canModifyPow ? resetDupaAdjustment : undefined}
                         laborLocation={activeEstimate?.location || project?.district || ''}
                         district={project?.district || ''}
+                        laborVersion={activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || ''}
                       />
                     ) : (
                       <div className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-600">No DUPA data available for this project.</div>
@@ -1456,6 +1553,14 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                         <p className="text-sm text-gray-600 mt-1">
                           Open the DPWH Program of Works report for the selected estimate.
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
+                            CMPD: {activeEstimate?.cmpdVersion || project?.manualPowConfig?.cmpdVersion || project?.cmpdVersion || 'N/A'}
+                          </span>
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                            Labor: {activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || 'Latest'}
+                          </span>
+                        </div>
                       </div>
                       <button
                         onClick={handleExportPDF}

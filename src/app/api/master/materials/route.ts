@@ -13,11 +13,11 @@ import { z } from 'zod';
 // ============================================================================
 
 const MaterialSchema = z.object({
-  materialCode: z.string().min(1, 'Material code is required').toUpperCase(),
-  materialDescription: z.string().min(1, 'Material description is required'),
-  unit: z.string().min(1, 'Unit is required').toUpperCase(),
-  basePrice: z.number().min(0, 'Base price must be non-negative'),
-  category: z.string().optional(),
+  materialCode: z.string().trim().min(1, 'Material code is required').transform((v) => v.toUpperCase()),
+  works: z.string().trim().min(1, 'Works is required').transform((v) => v.toUpperCase()),
+  materialDescription: z.string().trim().min(1, 'Material description is required').transform((v) => v.replace(/\s+/g, ' ')),
+  unit: z.string().trim().min(1, 'Unit is required').transform((v) => v.toUpperCase()),
+  category: z.string().trim().min(1, 'Category is required').transform((v) => v.toUpperCase()),
   includeHauling: z.boolean().optional().default(true),
   isActive: z.boolean().optional().default(true),
 });
@@ -54,8 +54,8 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
  * - search: Search in materialCode or materialDescription (partial match)
  * - category: Filter by category (exact match)
  * - active: Filter by active status (true/false)
- * - minPrice: Minimum base price
- * - maxPrice: Maximum base price
+ * - minPrice: Deprecated (ignored)
+ * - maxPrice: Deprecated (ignored)
  * - sortBy: Field to sort by (default: materialCode)
  * - order: Sort order 'asc' or 'desc' (default: asc)
  */
@@ -91,11 +91,8 @@ export async function GET(request: NextRequest) {
       query.isActive = active === 'true';
     }
     
-    if (minPrice || maxPrice) {
-      query.basePrice = {};
-      if (minPrice) query.basePrice.$gte = parseFloat(minPrice);
-      if (maxPrice) query.basePrice.$lte = parseFloat(maxPrice);
-    }
+    void minPrice;
+    void maxPrice;
     
     // Execute query
     const materials = await Material.find(query)

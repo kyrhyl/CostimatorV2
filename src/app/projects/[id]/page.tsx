@@ -3,14 +3,27 @@
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useSession } from 'next-auth/react';
 import VersionStatusBadge from '@/components/versioning/VersionStatusBadge';
-import EstimateList from '@/components/cost-estimates/EstimateList';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
-import TakeoffViewer from '@/components/takeoff/TakeoffViewer';
-import BOQViewer from '@/components/takeoff/BOQViewer';
-import CalcRunList from '@/components/takeoff/CalcRunList';
-import ProgramOfWorksTab from './components/ProgramOfWorksTab';
+import { fetchJsonDedup } from '@/lib/utils/fetch-json-dedup';
+
+const EstimateList = dynamic(() => import('@/components/cost-estimates/EstimateList'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading estimates...</div>
+});
+const TakeoffViewer = dynamic(() => import('@/components/takeoff/TakeoffViewer'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading takeoff viewer...</div>
+});
+const BOQViewer = dynamic(() => import('@/components/takeoff/BOQViewer'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading BOQ viewer...</div>
+});
+const CalcRunList = dynamic(() => import('@/components/takeoff/CalcRunList'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading calculation runs...</div>
+});
+const ProgramOfWorksTab = dynamic(() => import('./components/ProgramOfWorksTab'), {
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading program of works...</div>
+});
 
 interface Project {
   _id: string;
@@ -132,13 +145,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const fetchProject = async () => {
     try {
-      const response = await fetch(`/api/projects/${id}`);
-      
+      const { res: response, data: result } = await fetchJsonDedup(`/api/projects/${id}`, `project:${id}`);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const result = await response.json();
       
       if (result.success) {
         setProject(result.data);
@@ -154,13 +165,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const fetchEstimates = async () => {
     try {
-      const response = await fetch(`/api/projects/${id}/estimates`);
-      
+      const { res: response, data: result } = await fetchJsonDedup(`/api/projects/${id}/estimates`, `project-estimates:${id}`);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const result = await response.json();
       
       if (result.success) {
         setEstimates(result.data);
@@ -174,13 +183,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const fetchVersionSummary = async () => {
     try {
-      // Fetch takeoff versions
-      const versionsResponse = await fetch(`/api/projects/${id}/takeoff-versions`);
-      const estimatesResponse = await fetch(`/api/projects/${id}/cost-estimates`);
-      
-      if (versionsResponse.ok && estimatesResponse.ok) {
-        const versionsData = await versionsResponse.json();
-        const estimatesData = await estimatesResponse.json();
+      const [versionsResult, estimatesResult] = await Promise.all([
+        fetchJsonDedup(`/api/projects/${id}/takeoff-versions`, `takeoff-versions:${id}`),
+        fetchJsonDedup(`/api/projects/${id}/cost-estimates`, `cost-estimates:${id}`),
+      ]);
+
+      if (versionsResult.res.ok && estimatesResult.res.ok) {
+        const versionsData = versionsResult.data;
+        const estimatesData = estimatesResult.data;
         
         if (versionsData.success && estimatesData.success) {
           const versions = versionsData.data || [];
@@ -221,10 +231,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const fetchLatestTakeoffData = async () => {
     setLoadingTakeoffData(true);
     try {
-      // Fetch latest calc run
-      const calcRunRes = await fetch(`/api/projects/${id}/calcruns/latest`);
+      const { res: calcRunRes, data: calcRunData } = await fetchJsonDedup(`/api/projects/${id}/calcruns/latest`, `latest-calcrun:${id}`);
       if (calcRunRes.ok) {
-        const calcRunData = await calcRunRes.json();
         const calcRun = calcRunData.data; // API returns { success: true, data: calcRun }
         setLatestCalcRun(calcRun);
       } else {

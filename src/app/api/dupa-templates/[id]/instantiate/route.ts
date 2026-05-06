@@ -22,6 +22,8 @@ import { computeHaulingCost } from '@/lib/calc/hauling';
 
 const InstantiateRequestSchema = z.object({
   location: z.string().min(1, 'Location is required'),
+  district: z.string().optional(),
+  laborVersion: z.string().optional(),
   useEvaluated: z.boolean().default(false),
   effectiveDate: z.string().optional(), // For fetching historical prices
   projectId: z.string().optional(),
@@ -37,14 +39,43 @@ const InstantiateRequestSchema = z.object({
  */
 async function getMaterialPrice(
   materialCode: string,
+  location?: string,
   district?: string,
   effectiveDate?: Date,
-  cmpdVersion?: string
-): Promise<number> {
+  cmpdVersion?: string,
+  materialDescription?: string,
+): Promise<number | null> {
+  const normalizedCode = String(materialCode || '').trim().toUpperCase();
+  const codeRegex = normalizedCode ? new RegExp(`^${normalizedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
+  const normalizedDescription = String(materialDescription || '').trim();
+  const normalizedDescriptionLoose = normalizedDescription.replace(/\s+/g, ' ').trim();
+
+  // Priority 0: Try location-specific price (same strategy as POW costing)
+  if (location) {
+    const locationQuery: any = {
+      materialCode: codeRegex || normalizedCode,
+      location,
+      isActive: true,
+      effectiveDate: effectiveDate ? { $lte: effectiveDate } : { $exists: true },
+    };
+
+    if (cmpdVersion) locationQuery.cmpd_version = cmpdVersion;
+
+    const locationPrice: any = await MaterialPrice.findOne(locationQuery)
+      .sort({ effectiveDate: -1 })
+      .lean();
+
+    if (locationPrice) {
+      console.log(`Using location-specific price for ${materialCode} in ${location}${cmpdVersion ? ` (${cmpdVersion})` : ''}: ₱${locationPrice.unitCost}`);
+      return locationPrice.unitCost;
+    }
+
+  }
+
   // Priority 1: Try district-specific price
   if (district) {
     const query: any = {
-      materialCode: materialCode,
+      materialCode: codeRegex || normalizedCode,
       district: district,
       isActive: true,
       effectiveDate: effectiveDate 
@@ -53,9 +84,7 @@ async function getMaterialPrice(
     };
     
     // If CMPD version is specified, prefer that version
-    if (cmpdVersion) {
-      query.cmpd_version = cmpdVersion;
-    }
+    if (cmpdVersion) query.cmpd_version = cmpdVersion;
     
     const districtPrice: any = await MaterialPrice.findOne(query)
       .sort({ effectiveDate: -1 }) // Get most recent price
@@ -66,38 +95,52 @@ async function getMaterialPrice(
       return districtPrice.unitCost;
     }
     
-    // If no exact CMPD version match, try without version filter
-    if (cmpdVersion) {
-      const fallbackPrice: any = await MaterialPrice.findOne({
-        materialCode: materialCode,
-        district: district,
+  }
+
+  // Priority 1.5: Description-based lookup (handles bad/missing material codes)
+  if (normalizedDescription) {
+    const strictDescRegex = new RegExp(`^${normalizedDescription.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    const looseDescRegex = new RegExp(normalizedDescriptionLoose.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    if (location) {
+      const byDescLocation: any = await MaterialPrice.findOne({
+        description: { $in: [strictDescRegex, looseDescRegex] },
+        location,
         isActive: true,
-        effectiveDate: effectiveDate 
-          ? { $lte: effectiveDate } 
-          : { $exists: true }
+        ...(cmpdVersion ? { cmpd_version: cmpdVersion } : {}),
+        effectiveDate: effectiveDate ? { $lte: effectiveDate } : { $exists: true },
       })
         .sort({ effectiveDate: -1 })
         .lean();
-      
-      if (fallbackPrice) {
-        console.log(`Using district-specific price for ${materialCode} in ${district} (no version match, using latest): ₱${fallbackPrice.unitCost}`);
-        return fallbackPrice.unitCost;
+
+      if (byDescLocation) {
+        console.log(`Using location description price for ${normalizedDescription} in ${location}: ₱${byDescLocation.unitCost}`);
+        return byDescLocation.unitCost;
       }
+
+    }
+
+    if (district) {
+      const byDescDistrict: any = await MaterialPrice.findOne({
+        description: { $in: [strictDescRegex, looseDescRegex] },
+        district,
+        isActive: true,
+        ...(cmpdVersion ? { cmpd_version: cmpdVersion } : {}),
+        effectiveDate: effectiveDate ? { $lte: effectiveDate } : { $exists: true },
+      })
+        .sort({ effectiveDate: -1 })
+        .lean();
+
+      if (byDescDistrict) {
+        console.log(`Using district description price for ${normalizedDescription} in ${district}: ₱${byDescDistrict.unitCost}`);
+        return byDescDistrict.unitCost;
+      }
+
     }
   }
-  
-  // Priority 2: Fallback to Material base price
-  const material: any = await Material.findOne({ 
-    materialCode: materialCode 
-  }).lean();
-  
-  if (material) {
-    console.log(`Using base price for ${materialCode}: ₱${material.basePrice}`);
-    return material.basePrice || 0;
-  }
-  
-  console.warn(`No price found for material ${materialCode}`);
-  return 0;
+
+  console.warn(`No price found for material ${materialCode}${normalizedDescription ? ` (${normalizedDescription})` : ''}`);
+  return null;
 }
 
 export async function POST(
@@ -132,7 +175,7 @@ export async function POST(
       );
     }
 
-     const { location, projectId, projectOcmPercentage, projectCpPercentage } = validated;
+      const { location, projectId, projectOcmPercentage, projectCpPercentage } = validated;
     
     console.log(`Instantiating template with location: "${location}", projectId: ${projectId}, OCM: ${projectOcmPercentage}%, CP: ${projectCpPercentage}%`);
 
@@ -226,13 +269,68 @@ export async function POST(
       );
     }
 
-    // Fetch location-specific labor rates
-    const laborRates = await LaborRate.findOne({ location }).lean();
+    // Fetch location-specific labor rates with resilient fallback order
+    const requestedDistrict = validated.district || projectDistrict;
+    const requestedVersion = validated.laborVersion;
+    const escapedLocation = location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const locationRegex = new RegExp(`^${escapedLocation}$`, 'i');
+
+    const candidateQueries: Array<Record<string, unknown>> = [];
+
+    // 1) strict match (location + district + version)
+    candidateQueries.push({
+      location,
+      ...(requestedDistrict ? { district: requestedDistrict } : {}),
+      ...(requestedVersion ? { laborVersion: requestedVersion } : {}),
+    });
+
+    // 2) ignore district (if district may not align with project metadata)
+    if (requestedDistrict) {
+      candidateQueries.push({
+        location,
+        ...(requestedVersion ? { laborVersion: requestedVersion } : {}),
+      });
+    }
+
+    // 3) case-insensitive location variants
+    candidateQueries.push({
+      location: locationRegex,
+      ...(requestedDistrict ? { district: requestedDistrict } : {}),
+      ...(requestedVersion ? { laborVersion: requestedVersion } : {}),
+    });
+
+    if (requestedDistrict) {
+      candidateQueries.push({
+        location: locationRegex,
+        ...(requestedVersion ? { laborVersion: requestedVersion } : {}),
+      });
+    }
+
+    // 4) if requested version has no rows for the location, fallback to latest available
+    if (requestedVersion) {
+      candidateQueries.push({
+        location,
+        ...(requestedDistrict ? { district: requestedDistrict } : {}),
+      });
+      candidateQueries.push({
+        location: locationRegex,
+        ...(requestedDistrict ? { district: requestedDistrict } : {}),
+      });
+      candidateQueries.push({ location });
+      candidateQueries.push({ location: locationRegex });
+    }
+
+    let laborRates: any = null;
+    for (const query of candidateQueries) {
+      laborRates = await LaborRate.findOne(query).sort({ effectiveDate: -1, updatedAt: -1 }).lean();
+      if (laborRates) break;
+    }
+
     if (!laborRates) {
       return NextResponse.json(
         {
           success: false,
-          error: `No labor rates found for location: ${location}`,
+          error: `No labor rates found for location: ${location}${requestedVersion ? ` (version: ${requestedVersion})` : ''}`,
         },
         { status: 404 }
       );
@@ -324,6 +422,18 @@ export async function POST(
     console.log(`Project district: ${projectDistrict || 'N/A'}`);
     console.log(`Project CMPD version: ${projectCmpdVersion || 'N/A (using latest)'}`);
     
+    if (!projectCmpdVersion) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'CMPD version is required before DUPA instantiation. Set CMPD version in project/manual settings.',
+        },
+        { status: 422 }
+      );
+    }
+
+    const missingMaterials: Array<{ materialCode: string; description: string; reason: string }> = [];
+
     const materialEntries = await Promise.all(
       template.materialTemplate
         .filter((material: any) => material.materialCode && material.description) // Only process valid materials
@@ -334,17 +444,29 @@ export async function POST(
           if (material.materialCode) {
             // Fetch the material to check if hauling should be included
             materialDoc = await Material.findOne({ 
-              materialCode: material.materialCode 
+              materialCode: new RegExp(`^${String(material.materialCode || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
             }).lean();
 
             // Get price with district priority and CMPD version
             const effectiveDate = validated.effectiveDate ? new Date(validated.effectiveDate) : new Date();
-            basePrice = await getMaterialPrice(
+            const resolvedPrice = await getMaterialPrice(
               material.materialCode,
+              location,
               projectDistrict,
               effectiveDate,
-              projectCmpdVersion
+              projectCmpdVersion,
+              material.description,
             );
+            if (resolvedPrice === null) {
+              missingMaterials.push({
+                materialCode: String(material.materialCode || '').trim(),
+                description: String(material.description || '').trim(),
+                reason: `No active CMPD/canvass price found for version ${projectCmpdVersion}`,
+              });
+              basePrice = 0;
+            } else {
+              basePrice = resolvedPrice;
+            }
           }
 
           // Calculate unit cost with hauling if applicable
@@ -380,12 +502,34 @@ export async function POST(
         })
     );
 
+    if (missingMaterials.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Missing material prices for selected CMPD version. Please update CMPD/canvass prices first.',
+          details: {
+            cmpdVersion: projectCmpdVersion,
+            district: projectDistrict || '',
+            location,
+            missingMaterials,
+          },
+        },
+        { status: 422 }
+      );
+    }
+
     // Calculate costs
     const laborCostTotal = laborEntries.reduce((sum, item) => sum + item.amount, 0);
     const equipmentCostTotal = equipmentEntries.reduce((sum, item) => sum + item.amount, 0);
     const materialCostTotal = materialEntries.reduce((sum, item) => sum + item.amount, 0);
-    
-    const directCost = laborCostTotal + equipmentCostTotal + materialCostTotal;
+
+    // Align with DUPA worksheet math:
+    // direct unit cost = (labor + equipment) / outputPerHour
+    // direct + materials = direct unit cost + materials
+    const outputPerHour = Number(template.outputPerHour || 0) > 0 ? Number(template.outputPerHour) : 1;
+    const directLaborEquipmentCost = laborCostTotal + equipmentCostTotal;
+    const directUnitCost = directLaborEquipmentCost / outputPerHour;
+    const directCost = directUnitCost + materialCostTotal;
     
     // Use project-level percentages if provided, otherwise fall back to template percentages
     const ocmPercentage = projectOcmPercentage !== undefined ? projectOcmPercentage : template.ocmPercentage;
@@ -409,7 +553,7 @@ export async function POST(
       payItemNumber: template.payItemNumber,
       payItemDescription: template.payItemDescription,
       unitOfMeasurement: template.unitOfMeasurement,
-      outputPerHour: template.outputPerHour,
+      outputPerHour,
       category: template.category,
       
       // Computed arrays with rates

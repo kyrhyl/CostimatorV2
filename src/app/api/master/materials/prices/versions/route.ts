@@ -1,55 +1,68 @@
-/**
- * GET /api/master/materials/prices/versions
- * Get available CMPD versions, optionally filtered by district
- * 
- * Query Parameters:
- * - district: Filter by district (optional)
- * 
- * Returns:
- * {
- *   success: true,
- *   versions: ["CMPD-2024-Q1", "CMPD-2023-Q4", ...]
- * }
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import MaterialPrice from '@/models/MaterialPrice';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await dbConnect();
-    
-    const { searchParams } = new URL(request.url);
-    const district = searchParams.get('district');
-    
-    // Build query
-    const query: any = {
-      cmpd_version: { $exists: true, $ne: '' }
-    };
-    
-    if (district) {
-      query.district = district;
-    }
-    
-    // Get distinct CMPD versions
-    const versions = await MaterialPrice.distinct('cmpd_version', query);
-    
-    // Filter out null/empty values and sort in descending order
-    const sortedVersions = versions
-      .filter(v => v && v.trim() !== '')
-      .sort((a: string, b: string) => b.localeCompare(a));
-    
+    const versions = await MaterialPrice.distinct('cmpd_version', {
+      cmpd_version: { $exists: true, $ne: '' },
+    });
     return NextResponse.json({
       success: true,
-      count: sortedVersions.length,
-      versions: sortedVersions
+      data: versions.sort((a, b) => String(b).localeCompare(String(a))),
     });
   } catch (error: any) {
-    console.error('GET /api/master/materials/prices/versions error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch CMPD versions' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message || 'Failed to load CMPD versions' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    await dbConnect();
+    const body = await request.json();
+    const targetVersion = String(body?.targetVersion || '').trim();
+    const sourceVersion = String(body?.sourceVersion || '').trim();
+
+    if (!targetVersion) {
+      return NextResponse.json({ success: false, error: 'targetVersion is required' }, { status: 400 });
+    }
+    if (!sourceVersion) {
+      return NextResponse.json({ success: false, error: 'sourceVersion is required' }, { status: 400 });
+    }
+    if (sourceVersion === targetVersion) {
+      return NextResponse.json({ success: false, error: 'targetVersion must be different from sourceVersion' }, { status: 400 });
+    }
+
+    const existingTarget = await MaterialPrice.countDocuments({ cmpd_version: targetVersion });
+    if (existingTarget > 0) {
+      return NextResponse.json({ success: false, error: `CMPD version ${targetVersion} already has records` }, { status: 409 });
+    }
+
+    const sourceRows = await MaterialPrice.find({ cmpd_version: sourceVersion }).lean();
+    if (!sourceRows.length) {
+      return NextResponse.json({ success: false, error: `No records found for source version ${sourceVersion}` }, { status: 404 });
+    }
+
+    const cloned = sourceRows.map((row: any) => {
+      const { _id, createdAt, updatedAt, ...rest } = row;
+      return {
+        ...rest,
+        cmpd_version: targetVersion,
+        isActive: true,
+      };
+    });
+
+    const inserted = await MaterialPrice.insertMany(cloned, { ordered: false });
+    return NextResponse.json({
+      success: true,
+      message: `Created CMPD version ${targetVersion} from ${sourceVersion}`,
+      count: inserted.length,
+    });
+  } catch (error: any) {
+    if (error?.code === 11000) {
+      return NextResponse.json({ success: false, error: 'Duplicate records encountered while cloning version' }, { status: 409 });
+    }
+    return NextResponse.json({ success: false, error: error.message || 'Failed to create CMPD version' }, { status: 500 });
   }
 }

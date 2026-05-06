@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { computePercentOfProjectCost } from '@/lib/utils/pow-math';
 
 interface ItemLine {
@@ -48,6 +48,8 @@ export default function ProgramOfWorksItemizedTable({
   const [draftUnitCost, setDraftUnitCost] = useState<number>(0);
   const [draftReason, setDraftReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const ROW_BATCH = 120;
+  const [visibleRowCount, setVisibleRowCount] = useState(ROW_BATCH);
 
   const formatCurrency = (value: number) => {
     return '₱' + value.toLocaleString('en-PH', {
@@ -65,6 +67,40 @@ export default function ProgramOfWorksItemizedTable({
     () => groups.some((group) => group.items.some((item) => item.adjusted)),
     [groups],
   );
+
+  const flattenedRows = useMemo(() => {
+    const rows: Array<
+      | { kind: 'header'; key: string; group: PartGroup; partPercent: number }
+      | { kind: 'item'; key: string; item: ItemLine; itemPercent: number }
+    > = [];
+
+    groups.forEach((group) => {
+      rows.push({
+        kind: 'header',
+        key: `${group.part}-header`,
+        group,
+        partPercent: computePercentOfProjectCost(group.totalAmount, grandTotal),
+      });
+
+      group.items.forEach((item) => {
+        rows.push({
+          kind: 'item',
+          key: item.id,
+          item,
+          itemPercent: computePercentOfProjectCost(item.totalAmount, grandTotal),
+        });
+      });
+    });
+
+    return rows;
+  }, [groups, grandTotal]);
+
+  useEffect(() => {
+    setVisibleRowCount(ROW_BATCH);
+  }, [groups]);
+
+  const visibleRows = useMemo(() => flattenedRows.slice(0, visibleRowCount), [flattenedRows, visibleRowCount]);
+  const hasMoreRows = visibleRows.length < flattenedRows.length;
 
   const openEditor = (item: ItemLine) => {
     setEditingLineKey(item.lineKey);
@@ -141,11 +177,11 @@ export default function ProgramOfWorksItemizedTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {groups.map((group) => {
-              const partPercent = computePercentOfProjectCost(group.totalAmount, grandTotal);
-              return (
-                <Fragment key={group.part}>
-                  <tr key={`${group.part}-header`} className="bg-gray-50">
+            {visibleRows.map((row) => {
+              if (row.kind === 'header') {
+                const group = row.group;
+                return (
+                  <tr key={row.key} className="bg-gray-50">
                     <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-sm font-semibold text-gray-800`}>
                       {group.part}
                     </td>
@@ -156,14 +192,16 @@ export default function ProgramOfWorksItemizedTable({
                       {formatCurrency(group.totalAmount)}
                     </td>
                     <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-right text-sm font-semibold text-gray-900`}>
-                      {formatPercent(partPercent)}
+                      {formatPercent(row.partPercent)}
                     </td>
                   </tr>
-                  {group.items.map((item) => {
-                    const itemPercent = computePercentOfProjectCost(item.totalAmount, grandTotal);
-                    const isEditing = editingLineKey === item.lineKey;
-                    return (
-                      <tr key={item.id} className={item.adjusted ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-gray-50'}>
+                );
+              }
+
+              const item = row.item;
+              const isEditing = editingLineKey === item.lineKey;
+              return (
+                <tr key={row.key} className={item.adjusted ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-gray-50'}>
                         <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-sm text-gray-700 whitespace-nowrap`}>{item.itemNo}</td>
                         <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-sm text-gray-900`}>
                           <div className="flex items-center gap-2">
@@ -204,7 +242,7 @@ export default function ProgramOfWorksItemizedTable({
                           {formatCurrency(item.directCost)}
                         </td>
                         <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-sm text-right text-gray-600`}>
-                          {formatPercent(itemPercent)}
+                          {formatPercent(row.itemPercent)}
                         </td>
                         {editable && (
                           <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-right`}>
@@ -259,9 +297,6 @@ export default function ProgramOfWorksItemizedTable({
                           </td>
                         )}
                       </tr>
-                    );
-                  })}
-                </Fragment>
               );
             })}
           </tbody>
@@ -279,6 +314,17 @@ export default function ProgramOfWorksItemizedTable({
           </tfoot>
         </table>
       </div>
+      {hasMoreRows && (
+        <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-center">
+          <button
+            type="button"
+            onClick={() => setVisibleRowCount((prev) => prev + ROW_BATCH)}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+          >
+            Load more rows ({flattenedRows.length - visibleRows.length} remaining)
+          </button>
+        </div>
+      )}
     </div>
   );
 }

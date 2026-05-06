@@ -1,12 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 // Material Reference Database
-// Base prices from catalog - hauling cost is added per project
+// Canonical base material registry (metadata and hauling control)
 export interface IMaterial extends Document {
   materialCode: string;
+  works: string;
   materialDescription: string;
   unit: string;
-  basePrice: number; // Base price before hauling cost
   category?: string; // e.g., 'MG01', 'MG02', etc.
   includeHauling: boolean; // Whether to add hauling cost for this material
   isActive: boolean;
@@ -28,16 +28,17 @@ const MaterialSchema = new Schema<IMaterial>(
       required: true,
       trim: true,
     },
-    unit: {
+    works: {
       type: String,
       required: true,
       trim: true,
       uppercase: true,
     },
-    basePrice: {
-      type: Number,
+    unit: {
+      type: String,
       required: true,
-      min: 0,
+      trim: true,
+      uppercase: true,
     },
     category: {
       type: String,
@@ -60,6 +61,8 @@ const MaterialSchema = new Schema<IMaterial>(
 
 // Indexes
 MaterialSchema.index({ category: 1 });
+MaterialSchema.index({ works: 1 });
+MaterialSchema.index({ works: 1, category: 1 });
 MaterialSchema.index({ isActive: 1 });
 MaterialSchema.index({ materialDescription: 'text' });
 

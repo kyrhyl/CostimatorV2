@@ -57,6 +57,7 @@ export async function POST(
     
     // Validate required pricing configuration
     const cmpdVersion = body.cmpdVersion || project.cmpdVersion;
+    const laborVersion = body.laborVersion || project.laborVersion || '';
     const district = body.district || project.district;
     const location = body.location || project.projectLocation;
     
@@ -91,6 +92,7 @@ export async function POST(
       location,
       district,
       cmpdVersion,
+      laborVersion,
       effectiveDate: new Date(),
       
       ocmPercentage: body.ocmPercentage ?? 10,
@@ -138,7 +140,10 @@ export async function POST(
         }
         
         // Get labor rates for the location
-        const laborRates = await LaborRate.find({ location }).lean();
+        const laborRates = await LaborRate.find({
+          location,
+          ...(laborVersion ? { laborVersion } : {}),
+        }).lean();
         const laborRateMap = new Map(
           laborRates.map(lr => [lr.occupation, lr.hourlyRate])
         );

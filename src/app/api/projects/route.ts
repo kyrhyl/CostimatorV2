@@ -10,6 +10,8 @@ const ProjectSchema = z.object({
   projectName: z.string().min(1, 'Project name is required'),
   projectLocation: z.string().min(1, 'Project location is required'),
   district: z.string().default('Bukidnon 1st'),
+  cmpdVersion: z.string().optional(),
+  laborVersion: z.string().optional(),
   implementingOffice: z.string().default('DPWH Bukidnon 1st District Engineering Office'),
   appropriation: z.coerce.number().min(0).default(0),
   contractId: z.string().optional(),
@@ -23,10 +25,52 @@ const ProjectSchema = z.object({
   description: z.string().optional(),
   haulingCostPerKm: z.coerce.number().min(0).default(0),
   distanceFromOffice: z.coerce.number().min(0).default(0),
+  address: z.string().optional(),
+  targetStartDate: z.string().optional(),
+  targetCompletionDate: z.string().optional(),
+  contractDurationCD: z.coerce.number().optional(),
+  workingDays: z.coerce.number().optional(),
+  unworkableDays: z
+    .object({
+      sundays: z.coerce.number().optional(),
+      holidays: z.coerce.number().optional(),
+      rainyDays: z.coerce.number().optional(),
+    })
+    .optional(),
+  fundSource: z
+    .object({
+      projectId: z.string().optional(),
+      fundingAgreement: z.string().optional(),
+      fundingOrganization: z.string().optional(),
+    })
+    .optional(),
+  physicalTarget: z
+    .object({
+      infraType: z.string().optional(),
+      projectComponentId: z.string().optional(),
+      targetAmount: z.coerce.number().optional(),
+      unitOfMeasure: z.string().optional(),
+    })
+    .optional(),
+  projectComponent: z
+    .object({
+      componentId: z.string().optional(),
+      infraId: z.string().optional(),
+      coordinates: z
+        .object({
+          latitude: z.coerce.number().optional(),
+          longitude: z.coerce.number().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  allotedAmount: z.coerce.number().optional(),
+  estimatedComponentCost: z.coerce.number().optional(),
   manualPowConfig: z
     .object({
       laborLocation: z.string().optional(),
       cmpdVersion: z.string().optional(),
+      laborVersion: z.string().optional(),
       district: z.string().optional(),
       vatPercentage: z.number().optional(),
       notes: z.string().optional(),

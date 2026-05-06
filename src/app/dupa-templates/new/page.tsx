@@ -25,6 +25,36 @@ interface MaterialEntry {
   quantity: number;
 }
 
+function mergeMaterialOptions(
+  materials: Array<{ materialCode?: string; materialDescription?: string; unit?: string }> = [],
+  prices: Array<{ materialCode?: string; description?: string; unit?: string }> = [],
+) {
+  const byCode = new Map<string, { materialCode: string; description: string; unit: string }>();
+
+  materials.forEach((m) => {
+    const code = String(m.materialCode || '').trim().toUpperCase();
+    if (!code) return;
+    byCode.set(code, {
+      materialCode: code,
+      description: String(m.materialDescription || '').trim(),
+      unit: String(m.unit || '').trim(),
+    });
+  });
+
+  prices.forEach((p) => {
+    const code = String(p.materialCode || '').trim().toUpperCase();
+    if (!code) return;
+    const existing = byCode.get(code);
+    byCode.set(code, {
+      materialCode: code,
+      description: existing?.description || String(p.description || '').trim(),
+      unit: existing?.unit || String(p.unit || '').trim(),
+    });
+  });
+
+  return Array.from(byCode.values()).sort((a, b) => a.description.localeCompare(b.description));
+}
+
 export default function NewDUPATemplatePage() {
   const router = useRouter();
 
@@ -84,12 +114,13 @@ export default function NewDUPATemplatePage() {
   useEffect(() => {
     const loadMasterData = async () => {
       try {
-        const [eqRes, matRes, payRes] = await Promise.all([
+        const [eqRes, matRes, matPriceRes, payRes] = await Promise.all([
           fetch('/api/master/equipment'),
           fetch('/api/master/materials'),
+          fetch('/api/master/materials/prices?isActive=true'),
           fetch('/api/master/pay-items?limit=2000')
         ]);
-        const [eqJson, matJson, payJson] = await Promise.all([eqRes.json(), matRes.json(), payRes.json()]);
+        const [eqJson, matJson, matPriceJson, payJson] = await Promise.all([eqRes.json(), matRes.json(), matPriceRes.json(), payRes.json()]);
         if (eqJson.success) {
           const options = eqJson.data.map((e: any) => ({
             _id: e._id,
@@ -98,12 +129,11 @@ export default function NewDUPATemplatePage() {
           setEquipmentOptions(options);
           setBaseEquipmentOptions(options);
         }
-        if (matJson.success) {
-          const options = matJson.data.map((m: any) => ({ 
-            materialCode: m.materialCode, 
-            description: m.materialDescription, 
-            unit: m.unit 
-          }));
+        if (matJson.success || matPriceJson.success) {
+          const options = mergeMaterialOptions(
+            matJson.success ? matJson.data : [],
+            matPriceJson.success ? matPriceJson.data : [],
+          );
           setMaterialOptions(options);
           setBaseMaterialOptions(options);
         }
@@ -177,7 +207,7 @@ export default function NewDUPATemplatePage() {
       ...materialTemplate,
       { 
         materialCode: firstMaterial?.materialCode || '', 
-        description: firstMaterial?.description || 'N/A', 
+        description: firstMaterial?.description || '', 
         unit: firstMaterial?.unit || '', 
         quantity: 1 
       },
@@ -262,14 +292,15 @@ export default function NewDUPATemplatePage() {
 
     setMaterialSearchLoading(true);
     try {
-      const response = await fetch(`/api/master/materials?search=${encodeURIComponent(trimmedQuery)}`);
-      const data = await response.json();
-      if (data.success) {
-        setMaterialOptions(data.data.map((m: any) => ({
-          materialCode: m.materialCode,
-          description: m.materialDescription,
-          unit: m.unit,
-        })));
+      const [matRes, matPriceRes] = await Promise.all([
+        fetch(`/api/master/materials?search=${encodeURIComponent(trimmedQuery)}`),
+        fetch(`/api/master/materials/prices?search=${encodeURIComponent(trimmedQuery)}&isActive=true`),
+      ]);
+      const [matData, matPriceData] = await Promise.all([matRes.json(), matPriceRes.json()]);
+      if (matData.success || matPriceData.success) {
+        setMaterialOptions(
+          mergeMaterialOptions(matData.success ? matData.data : [], matPriceData.success ? matPriceData.data : []),
+        );
       }
     } catch (error) {
       console.error('Failed to search materials', error);

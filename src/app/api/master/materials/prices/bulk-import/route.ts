@@ -10,6 +10,13 @@ import Material from '@/models/Material';
 import Papa from 'papaparse';
 import { z } from 'zod';
 
+function normalizeSpecialChars(value: string): string {
+  return value
+    .replace(/\uFFFD/g, 'φ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ============================================================================
 // Validation Schemas
 // ============================================================================
@@ -43,55 +50,92 @@ const CMPDImportSchema = z.object({
 function parseFileBuffer(buffer: Buffer): Promise<any[]> {
   return new Promise((resolve, reject) => {
     const text = buffer.toString('utf-8');
-    
+
+    const columnMap: Record<string, string> = {
+      'material_code': 'materialCode',
+      'material_code,': 'materialCode',
+      'materialcode': 'materialCode',
+      'material code': 'materialCode',
+      'code': 'materialCode',
+      'itemcode': 'materialCode',
+      'description': 'description',
+      'material_description': 'description',
+      'materialdescription': 'description',
+      'unit': 'unit',
+      'uom': 'unit',
+      'unit_cost': 'unitCost',
+      'unitprice': 'unitCost',
+      'unit_price': 'unitCost',
+      'unit price': 'unitCost',
+      'unitcost': 'unitCost',
+      'price': 'unitCost',
+      'cost': 'unitCost',
+      'brand': 'brand',
+      'specification': 'specification',
+      'specs': 'specification',
+      'supplier': 'supplier',
+    };
+
     Papa.parse(text, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (header) => {
-        return header.toLowerCase().trim().replace(/\s+/g, '_');
-      },
-      transform: (value, header) => {
-        if (header === 'unit_cost' || header === 'unitcost' || header === 'price' || header === 'cost') {
-          return parseFloat(value.replace(/,/g, '')) || 0;
-        }
-        return value;
-      },
+      transformHeader: (header) => header.toLowerCase().trim().replace(/\s+/g, '_'),
       complete: (results) => {
         if (results.errors.length > 0) {
           return reject(new Error(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`));
         }
-        
-        const columnMap: Record<string, string> = {
-          'material_code': 'materialCode',
-          'materialcode': 'materialCode',
-          'code': 'materialCode',
-          'description': 'description',
-          'unit': 'unit',
-          'unit_cost': 'unitCost',
-          'unitcost': 'unitCost',
-          'price': 'unitCost',
-          'cost': 'unitCost',
-          'brand': 'brand',
-          'specification': 'specification',
-          'specs': 'specification',
-          'supplier': 'supplier',
-        };
-        
-        const mappedRows = results.data.map((row: any, index) => {
-          const mapped: any = {};
-          for (const [key, value] of Object.entries(row)) {
-            const mappedKey = columnMap[key] || key;
-            mapped[mappedKey] = value || '';
-          }
-          mapped._rowIndex = index + 2;
-          return mapped;
+
+        const rows = (results.data as any[]) || [];
+        const hasExpectedHeaders = rows.length > 0 && Object.keys(rows[0]).some((k) => {
+          const normalizedKey = String(k).toLowerCase().trim();
+          return Object.prototype.hasOwnProperty.call(columnMap, normalizedKey);
         });
-        
-        resolve(mappedRows);
+
+        if (hasExpectedHeaders) {
+          const mappedRows = rows.map((row: any, index) => {
+            const mapped: any = {};
+            for (const [key, value] of Object.entries(row)) {
+              const normalizedKey = String(key).toLowerCase().trim();
+              const mappedKey = columnMap[normalizedKey] || key;
+              if (mappedKey === 'unitCost') {
+                mapped[mappedKey] = parseFloat(String(value || '').replace(/,/g, '')) || 0;
+              } else {
+                mapped[mappedKey] = typeof value === 'string' ? normalizeSpecialChars(value) : (value || '');
+              }
+            }
+            mapped._rowIndex = index + 2;
+            return mapped;
+          });
+          resolve(mappedRows);
+          return;
+        }
+
+        // Fallback for headerless CSV: code, description, unit, unit_cost, brand, specification, supplier
+        Papa.parse(text, {
+          header: false,
+          skipEmptyLines: true,
+          complete: (fallback) => {
+            if (fallback.errors.length > 0) {
+              return reject(new Error(`CSV parsing errors: ${fallback.errors.map(e => e.message).join(', ')}`));
+            }
+
+            const mappedRows = ((fallback.data as any[]) || []).map((cols: any[], index) => ({
+              materialCode: normalizeSpecialChars(String(cols?.[0] || '')),
+              description: normalizeSpecialChars(String(cols?.[1] || '')),
+              unit: normalizeSpecialChars(String(cols?.[2] || '')),
+              unitCost: parseFloat(String(cols?.[3] || '').replace(/,/g, '')) || 0,
+              brand: normalizeSpecialChars(String(cols?.[4] || '')),
+              specification: normalizeSpecialChars(String(cols?.[5] || '')),
+              supplier: normalizeSpecialChars(String(cols?.[6] || '')),
+              _rowIndex: index + 1,
+            }));
+
+            resolve(mappedRows);
+          },
+          error: (error: Error) => reject(error),
+        });
       },
-      error: (error: Error) => {
-        reject(error);
-      }
+      error: (error: Error) => reject(error),
     });
   });
 }
@@ -204,17 +248,54 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Enrich missing description/unit from base materials master
+    const uniqueCodes = [...new Set(rows.map((r) => String(r.materialCode || '').trim().toUpperCase()).filter(Boolean))];
+    const materialMasterRows = await Material.find({ materialCode: { $in: uniqueCodes } })
+      .select('materialCode materialDescription unit')
+      .lean();
+    const materialMasterMap = new Map(
+      materialMasterRows.map((m: any) => [String(m.materialCode || '').trim().toUpperCase(), m])
+    );
+
+    const normalizedRows = rows.map((row) => {
+      const code = String(row.materialCode || '').trim().toUpperCase();
+      const master = materialMasterMap.get(code);
+      const next = { ...row };
+      if ((!next.description || !String(next.description).trim()) && master?.materialDescription) {
+        next.description = String(master.materialDescription);
+      }
+      if ((!next.unit || !String(next.unit).trim()) && master?.unit) {
+        next.unit = String(master.unit);
+      }
+      return next;
+    });
+
     // Validate rows
     const validationResults = {
-      total: rows.length,
+      total: normalizedRows.length,
       valid: [] as any[],
       invalid: [] as any[],
       errors: [] as string[]
     };
-    
-    for (const row of rows) {
+
+    const duplicateCodesInFile = new Set<string>();
+    const seenCodes = new Set<string>();
+
+    for (const row of normalizedRows) {
+      const code = String(row.materialCode || '').trim().toUpperCase();
+      if (code) {
+        if (seenCodes.has(code)) duplicateCodesInFile.add(code);
+        seenCodes.add(code);
+      }
+
       const validation = CMPDRowSchema.safeParse(row);
       if (validation.success) {
+        const existsInMaster = materialMasterMap.has(validation.data.materialCode);
+        if (!existsInMaster) {
+          validationResults.invalid.push(row);
+          validationResults.errors.push(`Row ${row._rowIndex}: material code ${validation.data.materialCode} not found in base materials master`);
+          continue;
+        }
         validationResults.valid.push({
           ...validation.data,
           _rowIndex: row._rowIndex
@@ -225,6 +306,11 @@ export async function POST(request: NextRequest) {
           `Row ${row._rowIndex}: ${validation.error.errors.map(e => e.message).join(', ')}`
         );
       }
+    }
+
+    if (duplicateCodesInFile.size > 0) {
+      validationResults.errors.push(`Duplicate material codes in file: ${Array.from(duplicateCodesInFile).join(', ')}`);
+      validationResults.valid = validationResults.valid.filter((r) => !duplicateCodesInFile.has(r.materialCode));
     }
     
     // Check if validation is required and perform it
@@ -252,7 +338,16 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           error: 'No valid rows to import',
-          details: validationResults.errors
+          details: validationResults.errors,
+          expectedColumns: [
+            'material_code (or code)',
+            'description (optional if present in base master)',
+            'unit (optional if present in base master)',
+            'unit_cost (or price/cost)',
+            'brand (optional)',
+            'specification (optional)',
+            'supplier (optional)',
+          ]
         },
         { status: 400 }
       );

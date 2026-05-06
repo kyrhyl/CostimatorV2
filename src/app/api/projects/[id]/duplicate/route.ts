@@ -94,9 +94,11 @@ export async function POST(
       projectName: options.projectName,
       projectLocation: options.projectLocation || sourceProject.projectLocation,
       district: sourceProject.district,
+      cmpdVersion: sourceProject.cmpdVersion,
       implementingOffice: sourceProject.implementingOffice,
       appropriation: sourceProject.appropriation,
       projectType: sourceProject.projectType,
+      powMode: sourceProject.powMode,
       status: 'Planning', // Always start as Planning
       description: sourceProject.description 
         ? `Duplicated from: ${sourceProject.projectName}. ${sourceProject.description}`

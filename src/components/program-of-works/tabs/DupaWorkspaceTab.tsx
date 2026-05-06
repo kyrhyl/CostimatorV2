@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DupaItemBreakdown, DupaReportData } from '@/types/dupa';
 import { FormDUPAPage } from '../forms/FormDUPAPage';
-import { DupaTab } from './DupaTab';
 
 interface DupaWorkspaceTabProps {
   data: DupaReportData;
@@ -15,6 +14,7 @@ interface DupaWorkspaceTabProps {
   onResetDupaAdjustment?: (itemKey: string) => Promise<void>;
   laborLocation?: string;
   district?: string;
+  laborVersion?: string;
 }
 
 type KeyedItem = { item: DupaItemBreakdown; index: number; key: string };
@@ -128,9 +128,9 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
     onResetDupaAdjustment,
     laborLocation,
     district,
+    laborVersion,
   } = props;
 
-  const [useLegacyView, setUseLegacyView] = useState(false);
   const [partFilter, setPartFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [adjustedOnly, setAdjustedOnly] = useState(false);
@@ -182,6 +182,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
         const laborParams = new URLSearchParams();
         if (laborLocation) laborParams.set('location', laborLocation);
         if (!laborLocation && district) laborParams.set('district', district);
+        if (laborVersion) laborParams.set('laborVersion', laborVersion);
         const laborUrl = laborParams.toString() ? `/api/master/labor?${laborParams.toString()}` : '/api/master/labor';
 
         const [laborRes, equipmentRes, materialRes] = await Promise.all([
@@ -232,7 +233,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
     };
 
     void loadMaster();
-  }, [laborLocation, district]);
+  }, [laborLocation, district, laborVersion]);
 
   const applyLatestMasterValues = (item: DupaItemBreakdown | EditableItem): EditableItem => {
     const laborItems: EditableLabor[] = (item.laborItems || []).map((row) => {
@@ -321,24 +322,6 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
   const vatPercent = safe(selectedItem?.totals.vatPercent || 0);
   const indirectSubtotal = safe(selectedItem?.totals.ocmValue || 0) + safe(selectedItem?.totals.cpValue || 0) + safe(selectedItem?.totals.vatValue || 0);
 
-  if (useLegacyView) {
-    return (
-      <div className="space-y-3">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex items-center justify-between">
-          <span>Legacy DUPA editor mode (backup).</span>
-          <button
-            type="button"
-            onClick={() => setUseLegacyView(false)}
-            className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-          >
-            Return to modern editor
-          </button>
-        </div>
-        <DupaTab {...props} />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -347,13 +330,6 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
             <h3 className="text-sm font-semibold text-slate-900">DUPA Workspace Editor</h3>
             <p className="text-xs text-slate-600">Editor-first layout with separate DPWH form preview.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setUseLegacyView(true)}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Switch to legacy editor (backup)
-          </button>
         </div>
       </div>
 

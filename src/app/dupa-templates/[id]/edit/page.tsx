@@ -25,6 +25,36 @@ interface MaterialEntry {
   quantity: number;
 }
 
+function mergeMaterialOptions(
+  materials: Array<{ materialCode?: string; materialDescription?: string; unit?: string }> = [],
+  prices: Array<{ materialCode?: string; description?: string; unit?: string }> = [],
+) {
+  const byCode = new Map<string, { materialCode: string; description: string; unit: string }>();
+
+  materials.forEach((m) => {
+    const code = String(m.materialCode || '').trim().toUpperCase();
+    if (!code) return;
+    byCode.set(code, {
+      materialCode: code,
+      description: String(m.materialDescription || '').trim(),
+      unit: String(m.unit || '').trim(),
+    });
+  });
+
+  prices.forEach((p) => {
+    const code = String(p.materialCode || '').trim().toUpperCase();
+    if (!code) return;
+    const existing = byCode.get(code);
+    byCode.set(code, {
+      materialCode: code,
+      description: existing?.description || String(p.description || '').trim(),
+      unit: existing?.unit || String(p.unit || '').trim(),
+    });
+  });
+
+  return Array.from(byCode.values()).sort((a, b) => a.description.localeCompare(b.description));
+}
+
 export default function EditDUPATemplatePage() {
   const params = useParams();
   const router = useRouter();
@@ -92,16 +122,18 @@ export default function EditDUPATemplatePage() {
   const loadData = useCallback(async () => {
     try {
       // Load template data and master data in parallel
-      const [templateRes, eqRes, matRes] = await Promise.all([
+      const [templateRes, eqRes, matRes, matPriceRes] = await Promise.all([
         fetch(`/api/dupa-templates/${id}`),
         fetch('/api/master/equipment'),
-        fetch('/api/master/materials')
+        fetch('/api/master/materials'),
+        fetch('/api/master/materials/prices?isActive=true')
       ]);
 
-      const [templateData, eqJson, matJson] = await Promise.all([
+      const [templateData, eqJson, matJson, matPriceJson] = await Promise.all([
         templateRes.json(),
         eqRes.json(),
-        matRes.json()
+        matRes.json(),
+        matPriceRes.json()
       ]);
 
       // Load master data
@@ -115,12 +147,11 @@ export default function EditDUPATemplatePage() {
         setEquipmentOptions(equipmentOptionsData);
         setBaseEquipmentOptions(equipmentOptionsData);
       }
-      if (matJson.success) {
-        const materialOptionsData = matJson.data.map((m: any) => ({ 
-          materialCode: m.materialCode, 
-          description: m.materialDescription, 
-          unit: m.unit 
-        }));
+      if (matJson.success || matPriceJson.success) {
+        const materialOptionsData = mergeMaterialOptions(
+          matJson.success ? matJson.data : [],
+          matPriceJson.success ? matPriceJson.data : [],
+        );
         setMaterialOptions(materialOptionsData);
         setBaseMaterialOptions(materialOptionsData);
       }
@@ -160,13 +191,10 @@ export default function EditDUPATemplatePage() {
           setEquipmentTemplate(equipmentTemplateWithIds);
         }
         if (template.materialTemplate && template.materialTemplate.length > 0) {
-          const materialOptionsData = matJson.success
-            ? matJson.data.map((m: any) => ({
-              materialCode: m.materialCode,
-              description: m.materialDescription,
-              unit: m.unit,
-            }))
-            : [];
+          const materialOptionsData = mergeMaterialOptions(
+            matJson.success ? matJson.data : [],
+            matPriceJson.success ? matPriceJson.data : [],
+          );
           const materialTemplateWithCodes = template.materialTemplate.map((entry: MaterialEntry) => {
             if (entry.materialCode || !entry.description) return entry;
             const matched = materialOptionsData.find((opt: { materialCode: string; description: string; unit: string }) => opt.description === entry.description);
@@ -222,14 +250,15 @@ export default function EditDUPATemplatePage() {
 
     setMaterialSearchLoading(true);
     try {
-      const response = await fetch(`/api/master/materials?search=${encodeURIComponent(trimmedQuery)}`);
-      const data = await response.json();
-      if (data.success) {
-        setMaterialOptions(data.data.map((m: any) => ({
-          materialCode: m.materialCode,
-          description: m.materialDescription,
-          unit: m.unit,
-        })));
+      const [matRes, matPriceRes] = await Promise.all([
+        fetch(`/api/master/materials?search=${encodeURIComponent(trimmedQuery)}`),
+        fetch(`/api/master/materials/prices?search=${encodeURIComponent(trimmedQuery)}&isActive=true`),
+      ]);
+      const [matData, matPriceData] = await Promise.all([matRes.json(), matPriceRes.json()]);
+      if (matData.success || matPriceData.success) {
+        setMaterialOptions(
+          mergeMaterialOptions(matData.success ? matData.data : [], matPriceData.success ? matPriceData.data : []),
+        );
       }
     } catch (error) {
       console.error('Failed to search materials', error);
@@ -288,7 +317,7 @@ export default function EditDUPATemplatePage() {
       ...materialTemplate,
       { 
         materialCode: firstMaterial?.materialCode || '', 
-        description: firstMaterial?.description || 'N/A', 
+        description: firstMaterial?.description || '', 
         unit: firstMaterial?.unit || '', 
         quantity: 1 
       },

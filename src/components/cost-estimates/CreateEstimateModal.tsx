@@ -15,6 +15,11 @@ interface LaborRate {
   effectiveDate: string;
 }
 
+interface LaborVersionOption {
+  laborVersion: string;
+  status: string;
+}
+
 interface TakeoffVersion {
   _id: string;
   versionNumber: string;
@@ -39,6 +44,8 @@ export default function CreateEstimateModal({
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [cmpdVersions, setCmpdVersions] = useState<string[]>([]);
   const [loadingCmpdVersions, setLoadingCmpdVersions] = useState(true);
+  const [laborVersions, setLaborVersions] = useState<LaborVersionOption[]>([]);
+  const [loadingLaborVersions, setLoadingLaborVersions] = useState(true);
   const [takeoffVersions, setTakeoffVersions] = useState<TakeoffVersion[]>([]);
   const [loadingTakeoffVersions, setLoadingTakeoffVersions] = useState(true);
   const [boqSourceInfo, setBoqSourceInfo] = useState({ hasProjectBOQ: false, itemCount: 0 });
@@ -52,12 +59,14 @@ export default function CreateEstimateModal({
     location: '',
     district: '',
     cmpdVersion: '',
+    laborVersion: '',
     vatPercentage: 12,
   });
 
   useEffect(() => {
     loadLocations();
     loadCmpdVersions();
+    loadLaborVersions();
     loadTakeoffVersions();
     loadBoqInfo();
   }, []);
@@ -91,6 +100,26 @@ export default function CreateEstimateModal({
       console.error('Failed to load CMPD versions:', err);
     } finally {
       setLoadingCmpdVersions(false);
+    }
+  };
+
+  const loadLaborVersions = async () => {
+    try {
+      const response = await fetch('/api/master/labor/versions');
+      const data = await response.json();
+      if (data.success && Array.isArray(data.versions)) {
+        const filtered = data.versions
+          .filter((entry: LaborVersionOption) => entry.laborVersion && entry.laborVersion !== 'UNVERSIONED')
+          .sort((a: LaborVersionOption, b: LaborVersionOption) => b.laborVersion.localeCompare(a.laborVersion));
+        setLaborVersions(filtered);
+        if (filtered.length > 0) {
+          setFormData((prev) => ({ ...prev, laborVersion: prev.laborVersion || filtered[0].laborVersion }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load labor versions:', err);
+    } finally {
+      setLoadingLaborVersions(false);
     }
   };
 
@@ -143,6 +172,7 @@ export default function CreateEstimateModal({
         location: formData.location,
         district: formData.district,
         cmpdVersion: formData.cmpdVersion,
+        laborVersion: formData.laborVersion,
         vatPercentage: formData.vatPercentage,
         boqSource: formData.boqSource, // Tell API which source to use
       };
@@ -390,6 +420,26 @@ export default function CreateEstimateModal({
                 {cmpdVersions.map((version) => (
                   <option key={version} value={version}>
                     {version}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Labor Version (Quarter)</label>
+            {loadingLaborVersions ? (
+              <div className="w-full border rounded px-3 py-2 text-gray-400">Loading labor versions...</div>
+            ) : (
+              <select
+                value={formData.laborVersion}
+                onChange={(e) => setFormData({ ...formData, laborVersion: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">Latest published</option>
+                {laborVersions.map((version) => (
+                  <option key={version.laborVersion} value={version.laborVersion}>
+                    {version.laborVersion} ({version.status})
                   </option>
                 ))}
               </select>

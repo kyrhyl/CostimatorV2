@@ -32,7 +32,7 @@
   display: none;
 }
 
-:global(.a4-page) {
+.printScope :global(.a4-page) {
   background: white;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
               0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -43,23 +43,23 @@
   overflow: hidden;
 }
 
-:global(.a4-page-landscape) {
+.printScope :global(.a4-page-landscape) {
   width: 297mm;
   min-height: 210mm;
   page: landscapePage;
 }
 
-:global(.a4-page-portrait) {
+.printScope :global(.a4-page-portrait) {
   width: 210mm;
   min-height: 297mm;
   page: portraitPage;
 }
 
-:global(.a4-page:first-of-type) {
+.printScope :global(.a4-page:first-of-type) {
   page-break-before: auto;
 }
 
-:global(.a4-page::after) {
+.printScope :global(.a4-page::after) {
   content: "Page " attr(data-page);
   position: absolute;
   bottom: 5mm;
@@ -68,13 +68,13 @@
   color: #999;
 }
 
-:global(.itemized-table) {
+.printScope :global(.itemized-table) {
   border-collapse: collapse;
   border-spacing: 0;
 }
 
 @media print {
-  :global(*) {
+  .printScope :global(*) {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
@@ -82,22 +82,22 @@
 
   .noPrint,
   .screenOnly,
-  :global([data-print-hide="true"]) {
+  .printScope :global([data-print-hide="true"]) {
     display: none !important;
     visibility: hidden !important;
     height: 0 !important;
     overflow: hidden !important;
   }
 
-  :global(body),
-  :global(.min-h-screen),
-  :global(.bg-gray-50) {
+  :global(body) .printScope,
+  .printScope :global(.min-h-screen),
+  .printScope :global(.bg-gray-50) {
     background-color: white !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
-  :global(.print-container) {
+  .printScope :global(.print-container) {
     box-shadow: none !important;
     border: none !important;
     width: 297mm !important;
@@ -107,11 +107,11 @@
     height: auto !important;
   }
 
-  :global(.print-break-inside) {
+  .printScope :global(.print-break-inside) {
     break-inside: avoid;
   }
 
-  :global(.a4-page) {
+  .printScope :global(.a4-page) {
     box-shadow: none;
     margin: 0;
     width: auto !important;
@@ -121,54 +121,54 @@
     page-break-inside: avoid;
   }
 
-  :global(.a4-page[data-orientation='landscape']),
-  :global(.a4-page[data-orientation='portrait']) {
+  .printScope :global(.a4-page[data-orientation='landscape']),
+  .printScope :global(.a4-page[data-orientation='portrait']) {
     width: auto !important;
     min-height: auto !important;
     height: auto !important;
   }
 
-  :global(.a4-page) {
+  .printScope :global(.a4-page) {
     break-after: page;
     page-break-after: always;
   }
 
-  :global(.a4-page:last-child) {
+  .printScope :global(.a4-page:last-child) {
     break-after: auto;
     page-break-after: auto;
   }
 
-  :global(.a4-page-landscape) {
+  .printScope :global(.a4-page-landscape) {
     page: landscapePage;
   }
 
-  :global(.a4-page-portrait) {
+  .printScope :global(.a4-page-portrait) {
     page: portraitPage;
   }
 
-  :global(.a4-page:first-of-type) {
+  .printScope :global(.a4-page:first-of-type) {
     page-break-before: auto;
   }
 
-  :global(.a4-page::after) {
+  .printScope :global(.a4-page::after) {
     display: none;
   }
 
-  :global(.itemized-table) {
+  .printScope :global(.itemized-table) {
     width: 100%;
     table-layout: fixed;
   }
 
-  :global(.itemized-table thead) {
+  .printScope :global(.itemized-table thead) {
     display: table-header-group;
   }
 
-  :global(.itemized-table tbody tr) {
+  .printScope :global(.itemized-table tbody tr) {
     break-inside: avoid;
   }
 
-  :global(.itemized-table th),
-  :global(.itemized-table td) {
+  .printScope :global(.itemized-table th),
+  .printScope :global(.itemized-table td) {
     border: 1px solid #000 !important;
   }
 

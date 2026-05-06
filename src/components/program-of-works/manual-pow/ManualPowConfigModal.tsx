@@ -5,8 +5,10 @@ interface ManualPowConfigModalProps {
   configForm: ManualPowConfigForm;
   district?: string;
   laborLocations: string[];
+  laborVersionOptions: string[];
   cmpdOptions: string[];
   loadingLaborLocations: boolean;
+  loadingLaborVersions: boolean;
   loadingCmpdVersions: boolean;
   configLoading: boolean;
   configError: string | null;
@@ -20,8 +22,10 @@ export default function ManualPowConfigModal({
   configForm,
   district,
   laborLocations,
+  laborVersionOptions,
   cmpdOptions,
   loadingLaborLocations,
+  loadingLaborVersions,
   loadingCmpdVersions,
   configLoading,
   configError,
@@ -37,7 +41,7 @@ export default function ManualPowConfigModal({
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div>
             <p className="text-base font-semibold text-gray-900">Manual POW Settings</p>
-            <p className="text-xs text-gray-500">Select the labor rate location and CMPD version to drive manual BOQ entries.</p>
+            <p className="text-xs text-gray-500">Select labor location, labor version, and CMPD version for manual BOQ entries.</p>
           </div>
           <button className="text-gray-500 hover:text-gray-700" onClick={onClose}>
             ✕
@@ -63,6 +67,30 @@ export default function ManualPowConfigModal({
                 {laborLocations.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">Labor Version</label>
+            {loadingLaborVersions ? (
+              <p className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-500">Loading labor versions...</p>
+            ) : laborVersionOptions.length === 0 ? (
+              <p className="mt-1 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500">
+                No labor versions available. Create labor rates first.
+              </p>
+            ) : (
+              <select
+                value={configForm.laborVersion}
+                onChange={(e) => onConfigFormChange({ ...configForm, laborVersion: e.target.value })}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
+              >
+                <option value="">Select labor version...</option>
+                {laborVersionOptions.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
                   </option>
                 ))}
               </select>
@@ -144,7 +172,12 @@ export default function ManualPowConfigModal({
             type="button"
             onClick={onSave}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            disabled={configLoading || laborLocations.length === 0 || cmpdOptions.length === 0}
+            disabled={
+              configLoading ||
+              laborLocations.length === 0 ||
+              laborVersionOptions.length === 0 ||
+              cmpdOptions.length === 0
+            }
           >
             {configLoading ? 'Saving...' : 'Save Settings'}
           </button>

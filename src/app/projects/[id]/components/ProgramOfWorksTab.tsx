@@ -309,27 +309,27 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
 
       {/* Estimates List */}
       <div className="bg-white rounded-lg border border-gray-200 shadow overflow-hidden">
-        <table className="w-full">
+        <table className="w-full text-sm">
           <thead className="bg-dpwh-blue-700 text-white">
             <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold">Estimate Name</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold">CMPD Version</th>
-              <th className="px-6 py-3 text-center text-sm font-semibold">Source</th>
-              <th className="px-6 py-3 text-right text-sm font-semibold">Grand Total</th>
-              <th className="px-6 py-3 text-center text-sm font-semibold">Items</th>
-              <th className="px-6 py-3 text-center text-sm font-semibold">Status</th>
-              <th className="px-6 py-3 text-center text-sm font-semibold">Date Created</th>
-              <th className="px-6 py-3 text-center text-sm font-semibold">Actions</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold">Estimate</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold">CMPD</th>
+              <th className="px-3 py-2 text-center text-xs font-semibold">Source</th>
+              <th className="px-3 py-2 text-right text-xs font-semibold">Total</th>
+              <th className="px-3 py-2 text-center text-xs font-semibold">Items</th>
+              <th className="px-3 py-2 text-center text-xs font-semibold">Status</th>
+              <th className="px-3 py-2 text-center text-xs font-semibold">Created</th>
+              <th className="px-3 py-2 text-center text-xs font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {estimates.map((estimate) => (
               <tr key={estimate._id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
+                <td className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <Link
                       href={getPowReportHref(estimate)}
-                      className="text-dpwh-blue-600 hover:text-dpwh-blue-800 font-medium text-left"
+                      className="text-dpwh-blue-600 hover:text-dpwh-blue-800 font-medium text-left text-sm"
                     >
                       {estimate.name || estimate.estimateNumber || 'Untitled Estimate'}
                     </Link>
@@ -340,10 +340,10 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
+                <td className="px-3 py-2.5 text-xs text-gray-600">
                   {estimate.cmpdVersion || 'N/A'}
                 </td>
-                <td className="px-6 py-4 text-center">
+                <td className="px-3 py-2.5 text-center">
                   {(() => {
                     const sourceMeta = getSourceMeta(estimate);
                     return (
@@ -353,13 +353,13 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                     );
                   })()}
                 </td>
-                <td className="px-6 py-4 text-sm text-right font-semibold text-dpwh-green-700">
+                <td className="px-3 py-2.5 text-xs text-right font-semibold text-dpwh-green-700 whitespace-nowrap">
                   {formatCurrency(estimate.costSummary?.grandTotal || 0)}
                 </td>
-                <td className="px-6 py-4 text-sm text-center text-gray-600">
+                <td className="px-3 py-2.5 text-xs text-center text-gray-600">
                   {estimate.costSummary?.rateItemsCount || 0}
                 </td>
-                <td className="px-6 py-4 text-center">
+                <td className="px-3 py-2.5 text-center">
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                     estimate.status === 'approved'
                       ? 'bg-dpwh-green-100 text-dpwh-green-800'
@@ -370,24 +370,24 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                     {estimate.status || 'draft'}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-center text-gray-600">
+                <td className="px-3 py-2.5 text-xs text-center text-gray-600 whitespace-nowrap">
                   {formatDate(estimate.createdAt)}
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex justify-center gap-2">
+                <td className="px-3 py-2.5">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
                     <Link
                       href={getPowReportHref(estimate)}
-                      className="text-dpwh-blue-600 hover:text-dpwh-blue-800 text-sm px-2 py-1 rounded hover:bg-blue-50"
+                      className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-blue-600 hover:text-dpwh-blue-800 text-xs px-1.5 py-1 rounded hover:bg-blue-50"
                       title="Program of Works Report"
                     >
-                      📄 POW Report
+                      POW Report
                     </Link>
                     <Link
                       href={`/projects/${projectId}/pow-audit?estimateId=${estimate._id}`}
-                      className="text-slate-700 hover:text-slate-900 text-sm px-2 py-1 rounded hover:bg-slate-100"
+                      className="inline-flex items-center whitespace-nowrap leading-5 text-slate-700 hover:text-slate-900 text-xs px-1.5 py-1 rounded hover:bg-slate-100"
                       title="Audit this version"
                     >
-                      🧾 Audit Review
+                      Audit Review
                     </Link>
                     {!canModifyPow && (
                       <Link
@@ -396,10 +396,10 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                             ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
                             : `/projects/${projectId}/program-of-works?section=manual-boq`
                         }
-                        className="text-dpwh-green-700 hover:text-dpwh-green-900 text-sm px-2 py-1 rounded hover:bg-green-50"
+                        className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-700 hover:text-dpwh-green-900 text-xs px-1.5 py-1 rounded hover:bg-green-50"
                         title="View workspace"
                       >
-                        👁 View Workspace
+                        View Workspace
                       </Link>
                     )}
                     {canModifyPow && (
@@ -412,48 +412,48 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                               ? `/projects/${projectId}/program-of-works?section=manual-boq`
                               : `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
                           }
-                          className="text-dpwh-green-600 hover:text-dpwh-green-800 text-sm px-2 py-1 rounded hover:bg-green-50"
+                          className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-600 hover:text-dpwh-green-800 text-xs px-1.5 py-1 rounded hover:bg-green-50"
                           title={isTakeoffLinkedEstimate(estimate) ? 'Edit this version in workspace' : 'Open manual BOQ workspace'}
                         >
-                          ✏️ Edit in Workspace
+                          Edit Workspace
                         </Link>
                         <button
                           type="button"
                           onClick={() => handleDuplicateEstimate(estimate)}
                           disabled={duplicatingEstimateId === estimate._id}
-                          className="text-indigo-600 hover:text-indigo-800 text-sm px-2 py-1 rounded hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="inline-flex items-center whitespace-nowrap leading-5 text-indigo-600 hover:text-indigo-800 text-xs px-1.5 py-1 rounded hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Duplicate this version"
                         >
-                          {duplicatingEstimateId === estimate._id ? 'Duplicating...' : '⧉ Duplicate'}
+                          {duplicatingEstimateId === estimate._id ? 'Duplicating...' : 'Duplicate'}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleRenameEstimate(estimate)}
                           disabled={renamingEstimateId === estimate._id}
-                          className="text-amber-700 hover:text-amber-900 text-sm px-2 py-1 rounded hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="inline-flex items-center whitespace-nowrap leading-5 text-amber-700 hover:text-amber-900 text-xs px-1.5 py-1 rounded hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Rename this version"
                         >
-                          {renamingEstimateId === estimate._id ? 'Renaming...' : '✎ Rename'}
+                          {renamingEstimateId === estimate._id ? 'Renaming...' : 'Rename'}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleTagAsFinal(estimate)}
                           disabled={taggingFinalEstimateId === estimate._id || estimate.isFinalSubmission}
-                          className="text-emerald-700 hover:text-emerald-900 text-sm px-2 py-1 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="inline-flex items-center whitespace-nowrap leading-5 text-emerald-700 hover:text-emerald-900 text-xs px-1.5 py-1 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Tag as final submission"
                         >
                           {estimate.isFinalSubmission
-                            ? '✓ Final'
+                            ? 'Final'
                             : taggingFinalEstimateId === estimate._id
                             ? 'Tagging...'
-                            : '🏁 Tag Final'}
+                            : 'Tag Final'}
                         </button>
                         <button
                           onClick={() => handleDeleteEstimate(estimate._id)}
-                          className="text-dpwh-red-600 hover:text-dpwh-red-800 text-sm px-2 py-1 rounded hover:bg-red-50"
+                          className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-red-600 hover:text-dpwh-red-800 text-xs px-1.5 py-1 rounded hover:bg-red-50"
                           title="Delete"
                         >
-                          🗑️ Delete
+                          Delete
                         </button>
                       </>
                     )}

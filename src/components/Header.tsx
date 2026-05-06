@@ -7,7 +7,7 @@ import { signIn, signOut, useSession } from 'next-auth/react';
 export default function Header() {
   const pathname = usePathname();
   const isActive = (path: string) => pathname === path || pathname?.startsWith(path + '/');
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const roles = session?.user?.roles || [];
   const isAdmin = roles.includes('master_admin') || roles.includes('admin');
 
@@ -70,7 +70,9 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center gap-3">
-            {session?.user ? (
+            {status === 'loading' ? (
+              <div className="h-9 w-24 rounded-lg bg-blue-500/40" aria-hidden="true" />
+            ) : session?.user ? (
               <>
                 {isAdmin && (
                   <Link

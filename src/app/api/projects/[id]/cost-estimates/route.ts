@@ -89,13 +89,19 @@ export async function POST(
       );
     }
 
+    const resolvedLaborVersion = body.laborVersion || project.manualPowConfig?.laborVersion || project.laborVersion || '';
+
     if (body.boqSource === 'manual') {
       console.log('[Cost Estimate] Configuring manual Program of Works');
       await ProjectBOQ.deleteMany({ projectId });
       project.powMode = 'manual';
+      if (resolvedLaborVersion) {
+        project.laborVersion = resolvedLaborVersion;
+      }
       project.manualPowConfig = {
         laborLocation: body.location,
         cmpdVersion: resolvedCmpdVersion,
+        laborVersion: resolvedLaborVersion,
         district: resolvedDistrict,
         vatPercentage: body.vatPercentage ?? 12,
         notes: body.manualNotes || '',
@@ -276,6 +282,7 @@ export async function POST(
         takeoffVersionId: takeoffVersionId?.toString() || projectId,
         location: body.location,
         district: resolvedDistrict,
+        laborVersion: resolvedLaborVersion,
         cmpdVersion: resolvedCmpdVersion,
         ocmPercentage: body.ocmPercentage ?? 12,
         cpPercentage: body.cpPercentage ?? 10,
@@ -305,6 +312,7 @@ export async function POST(
       location: body.location,
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpdVersion,
+      laborVersion: resolvedLaborVersion,
       effectiveDate: body.effectiveDate || new Date(),
       
       // Markup percentages (use the actual percentages calculated by estimateCalculator)
@@ -336,6 +344,9 @@ export async function POST(
     const estimateCount = await CostEstimate.countDocuments({ projectId });
     if (estimateCount === 1) {
       project.activeCostEstimateId = costEstimate._id as mongoose.Types.ObjectId;
+      if (resolvedLaborVersion && !project.laborVersion) {
+        project.laborVersion = resolvedLaborVersion;
+      }
       await project.save();
     }
     

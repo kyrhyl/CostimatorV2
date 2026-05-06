@@ -15,6 +15,11 @@ import { z } from 'zod';
 const LaborRateSchema = z.object({
   location: z.string().min(1, 'Location is required'),
   district: z.string().min(1, 'District is required'),
+  laborVersion: z.string().optional(),
+  validFrom: z.string().or(z.date()).optional(),
+  validTo: z.string().or(z.date()).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  isActive: z.boolean().optional(),
   foreman: z.number().min(0, 'Foreman rate must be positive'),
   leadman: z.number().min(0, 'Leadman rate must be positive'),
   equipmentOperatorHeavy: z.number().min(0, 'Equipment operator (heavy) rate must be positive'),
@@ -69,6 +74,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location');
     const district = searchParams.get('district');
+    const laborVersion = searchParams.get('laborVersion');
+    const status = searchParams.get('status');
     const sortBy = searchParams.get('sortBy') || 'location';
     const order = searchParams.get('order') === 'desc' ? -1 : 1;
     
@@ -80,10 +87,16 @@ export async function GET(request: NextRequest) {
     if (district) {
       query.district = district;
     }
+    if (laborVersion) {
+      query.laborVersion = laborVersion;
+    }
+    if (status) {
+      query.status = status;
+    }
     
     // Execute query
     const laborRates = await LaborRate.find(query)
-      .sort({ [sortBy]: order })
+      .sort({ [sortBy]: order, effectiveDate: -1, updatedAt: -1 })
       .lean();
     
     return NextResponse.json({
@@ -125,9 +138,13 @@ export async function POST(request: NextRequest) {
       }
       
       // Check for duplicates by location
-      const locations = validation.data!.map(rate => rate.location);
+      const locations = validation.data!.map(rate => ({
+        location: rate.location,
+        district: rate.district,
+        laborVersion: rate.laborVersion || null,
+      }));
       const existingRates = await LaborRate.find({
-        location: { $in: locations }
+        $or: locations
       }).select('location');
       
       if (existingRates.length > 0) {
@@ -135,7 +152,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `Labor rates already exist for locations: ${duplicates}` 
+          error: `Labor rates already exist for location/version keys: ${duplicates}` 
           },
           { status: 409 }
         );
@@ -167,14 +184,16 @@ export async function POST(request: NextRequest) {
       
       // Check if location already exists
       const existing = await LaborRate.findOne({ 
-        location: laborRateData.location 
+        location: laborRateData.location,
+        district: laborRateData.district,
+        laborVersion: laborRateData.laborVersion || null,
       });
       
       if (existing) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `Labor rate already exists for location: ${laborRateData.location}` 
+            error: `Labor rate already exists for location ${laborRateData.location}, district ${laborRateData.district}${laborRateData.laborVersion ? `, version ${laborRateData.laborVersion}` : ''}` 
           },
           { status: 409 }
         );

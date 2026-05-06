@@ -7,6 +7,8 @@ interface UseManualPowMasterDataOptions {
 export function useManualPowMasterData({ enabled }: UseManualPowMasterDataOptions) {
   const [laborLocations, setLaborLocations] = useState<string[]>([]);
   const [loadingLaborLocations, setLoadingLaborLocations] = useState(false);
+  const [laborVersionOptions, setLaborVersionOptions] = useState<string[]>([]);
+  const [loadingLaborVersions, setLoadingLaborVersions] = useState(false);
   const [cmpdOptions, setCmpdOptions] = useState<string[]>([]);
   const [loadingCmpdVersions, setLoadingCmpdVersions] = useState(false);
 
@@ -50,13 +52,39 @@ export function useManualPowMasterData({ enabled }: UseManualPowMasterDataOption
       }
     }
 
+    async function fetchLaborVersions() {
+      setLoadingLaborVersions(true);
+      try {
+        const response = await fetch('/api/master/labor/versions');
+        const data = await response.json();
+        if (data.success && Array.isArray(data.versions)) {
+          const versions = (data.versions as Array<{ laborVersion?: string; status?: string }>)
+            .filter((entry) => entry.laborVersion && entry.laborVersion !== 'UNVERSIONED')
+            .map((entry) => ({
+              laborVersion: String(entry.laborVersion),
+              status: String(entry.status || ''),
+            }))
+            .sort((a, b) => b.laborVersion.localeCompare(a.laborVersion));
+
+          setLaborVersionOptions(versions.map((entry) => entry.laborVersion));
+        }
+      } catch (err) {
+        console.error('Failed to load labor versions', err);
+      } finally {
+        setLoadingLaborVersions(false);
+      }
+    }
+
     fetchLaborLocations();
+    fetchLaborVersions();
     fetchCmpdVersions();
   }, [enabled]);
 
   return {
     laborLocations,
     loadingLaborLocations,
+    laborVersionOptions,
+    loadingLaborVersions,
     cmpdOptions,
     loadingCmpdVersions,
   };

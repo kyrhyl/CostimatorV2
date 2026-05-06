@@ -12,6 +12,7 @@ const ProjectUpdateSchema = z.object({
   projectName: z.string().min(1).optional(),
   projectLocation: z.string().min(1).optional(),
   district: z.string().optional(),
+  laborVersion: z.string().optional(),
   implementingOffice: z.string().optional(),
   appropriation: z.union([z.string(), z.number()]).optional(),
   contractId: z.string().optional(),
@@ -86,6 +87,7 @@ const ProjectUpdateSchema = z.object({
     .object({
       laborLocation: z.string().optional(),
       cmpdVersion: z.string().optional(),
+      laborVersion: z.string().optional(),
       district: z.string().optional(),
       vatPercentage: z.number().optional(),
       notes: z.string().optional(),

@@ -4,7 +4,12 @@
   "description": "DPWH Integrated Cost Estimation System - Quantity Takeoff + UPA/DUPA + BOQ Management",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "predev": "node scripts/clear-next-lock.mjs",
+    "predev:turbo": "node scripts/clear-next-lock.mjs",
+    "predev:webpack": "node scripts/clear-next-lock.mjs",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev --turbopack",
+    "dev:webpack": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -13,9 +18,11 @@
     "test:coverage": "vitest --coverage",
     "test:watch": "vitest --watch",
     "typecheck": "tsc --noEmit",
+    "perf:audit": "node scripts/perf-audit.mjs",
     "seed": "node --import tsx scripts/seed.ts",
     "seed:pay-items": "node scripts/import-pay-items.mjs",
-    "backfill:estimate-source": "node --import tsx scripts/backfill-cost-estimate-source.ts"
+    "backfill:estimate-source": "node --import tsx scripts/backfill-cost-estimate-source.ts",
+    "backfill:labor-version": "node --import tsx scripts/backfill-labor-version.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -23,14 +30,14 @@
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.2",
     "mongoose": "^9.1.1",
-    "next": "^16.1.6",
-    "next-auth": "^4.24.13",
+    "next": "^16.2.4",
+    "next-auth": "^4.24.14",
     "node-fetch": "^2.7.0",
     "papaparse": "^5.4.1",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "recharts": "^3.7.0",
-    "uuid": "^13.0.0",
+    "uuid": "^13.0.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -48,7 +55,7 @@
     "@vitest/ui": "^4.0.15",
     "autoprefixer": "^10.4.23",
     "eslint": "^9",
-    "eslint-config-next": "^15.1.0",
+    "eslint-config-next": "^16.2.4",
     "happy-dom": "^20.0.11",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
@@ -58,7 +65,7 @@
     "vitest": "^4.0.15"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "npm": ">=9.0.0"
   }
 }

@@ -123,6 +123,7 @@ export async function POST(
     const resolvedLocation = manualConfig.laborLocation || project.district || 'Project Location';
     const resolvedDistrict = manualConfig.district || project.district || 'N/A';
     const resolvedCmpd = manualConfig.cmpdVersion || project.cmpdVersion || 'N/A';
+    const resolvedLaborVersion = manualConfig.laborVersion || project.laborVersion || '';
 
     const ocmPercentage = costSummary.totalDirectCost > 0
       ? (costSummary.totalOCM / costSummary.totalDirectCost) * 100
@@ -145,6 +146,7 @@ export async function POST(
       location: resolvedLocation,
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpd,
+      laborVersion: resolvedLaborVersion,
       effectiveDate: new Date(),
       ocmPercentage,
       cpPercentage,
@@ -216,6 +218,7 @@ export async function PATCH(
     const resolvedLocation = manualConfig.laborLocation || project.district || 'Project Location';
     const resolvedDistrict = manualConfig.district || project.district || 'N/A';
     const resolvedCmpd = manualConfig.cmpdVersion || project.cmpdVersion || 'N/A';
+    const resolvedLaborVersion = manualConfig.laborVersion || project.laborVersion || '';
     const ocmPercentage = costSummary.totalDirectCost > 0
       ? (costSummary.totalOCM / costSummary.totalDirectCost) * 100
       : 12;
@@ -257,6 +260,7 @@ export async function PATCH(
         location: resolvedLocation,
         district: resolvedDistrict,
         cmpdVersion: resolvedCmpd,
+        laborVersion: resolvedLaborVersion,
         effectiveDate: new Date(),
         ocmPercentage,
         cpPercentage,
@@ -289,6 +293,7 @@ export async function PATCH(
     targetEstimate.location = resolvedLocation;
     targetEstimate.district = resolvedDistrict;
     targetEstimate.cmpdVersion = resolvedCmpd;
+    targetEstimate.laborVersion = resolvedLaborVersion;
     targetEstimate.ocmPercentage = ocmPercentage;
     targetEstimate.cpPercentage = cpPercentage;
     targetEstimate.vatPercentage = vatPercentage;

@@ -15,6 +15,12 @@ import { z } from 'zod';
 const UpdateLaborRateSchema = z.object({
   location: z.string().min(1, 'Location is required').optional(),
   district: z.string().min(1, 'District is required').optional(),
+  laborVersion: z.string().optional(),
+  validFrom: z.string().or(z.date()).optional(),
+  validTo: z.string().or(z.date()).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  isActive: z.boolean().optional(),
+  publishedAt: z.string().or(z.date()).nullable().optional(),
   foreman: z.number().min(0, 'Foreman rate must be positive').optional(),
   leadman: z.number().min(0, 'Leadman rate must be positive').optional(),
   equipmentOperatorHeavy: z.number().min(0, 'Equipment operator (heavy) rate must be positive').optional(),
@@ -127,10 +133,20 @@ export async function PATCH(
       );
     }
     
-    // If updating location, check for duplicates
-    if (updateData.location) {
+    // If updating location/version key, check for duplicates
+    if (updateData.location || updateData.district || updateData.laborVersion !== undefined) {
+      const existingRecord = await LaborRate.findById(id).lean();
+      if (!existingRecord) {
+        return NextResponse.json(
+          { success: false, error: 'Labor rate not found' },
+          { status: 404 }
+        );
+      }
+
       const existing = await LaborRate.findOne({
-        location: updateData.location,
+        location: updateData.location ?? (existingRecord as any).location,
+        district: updateData.district ?? (existingRecord as any).district,
+        laborVersion: updateData.laborVersion ?? (existingRecord as any).laborVersion ?? null,
         _id: { $ne: id }
       });
       
@@ -138,7 +154,7 @@ export async function PATCH(
         return NextResponse.json(
           { 
             success: false, 
-            error: `Labor rate already exists for location: ${updateData.location}` 
+            error: 'Labor rate already exists for this location, district, and labor version' 
           },
           { status: 409 }
         );

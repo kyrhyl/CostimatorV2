@@ -25,6 +25,7 @@ interface ManualPowManagerProps {
   district?: string;
   manualConfig?: {
     laborLocation?: string;
+    laborVersion?: string;
     cmpdVersion?: string;
     district?: string;
     vatPercentage?: number;
@@ -83,6 +84,7 @@ export default function ManualPowManager({
   const [configForm, setConfigForm] = useState<ManualPowConfigForm>({
     laborLocation: manualConfig?.laborLocation || district || projectLocation || '',
     district: manualConfig?.district || district || '',
+    laborVersion: manualConfig?.laborVersion || '',
     cmpdVersion: manualConfig?.cmpdVersion || '',
     vatPercentage: manualConfig?.vatPercentage ?? 12,
     notes: manualConfig?.notes || '',
@@ -99,7 +101,14 @@ export default function ManualPowManager({
     loadCommon: loadCommonTemplates,
   });
 
-  const { laborLocations, loadingLaborLocations, cmpdOptions, loadingCmpdVersions } = useManualPowMasterData({
+  const {
+    laborLocations,
+    loadingLaborLocations,
+    laborVersionOptions,
+    loadingLaborVersions,
+    cmpdOptions,
+    loadingCmpdVersions,
+  } = useManualPowMasterData({
     enabled: showConfigModal,
   });
 
@@ -128,6 +137,7 @@ export default function ManualPowManager({
     setConfigForm({
       laborLocation: manualConfig?.laborLocation || district || projectLocation || '',
       district: manualConfig?.district || district || '',
+      laborVersion: manualConfig?.laborVersion || '',
       cmpdVersion: manualConfig?.cmpdVersion || '',
       vatPercentage: manualConfig?.vatPercentage ?? 12,
       notes: manualConfig?.notes || '',
@@ -138,7 +148,7 @@ export default function ManualPowManager({
 
   const openTemplateModal = () => {
     if (readOnly) return;
-    if (!manualConfig?.laborLocation) {
+    if (!manualConfig?.laborLocation || !manualConfig?.laborVersion) {
       openConfigModal();
       return;
     }
@@ -153,6 +163,10 @@ export default function ManualPowManager({
     }
     if (!configForm.cmpdVersion) {
       setConfigError('Select a CMPD version.');
+      return;
+    }
+    if (!configForm.laborVersion) {
+      setConfigError('Select a labor version.');
       return;
     }
 
@@ -251,6 +265,11 @@ export default function ManualPowManager({
       setBulkError('Set a labor rate location for Manual Program of Works.');
       return;
     }
+    if (!manualConfig?.laborVersion) {
+      setBulkError('Set a labor version for Manual Program of Works.');
+      openConfigModal();
+      return;
+    }
     if (stagedTemplates.length === 0) {
       setBulkError('Add at least one DUPA template to the worksheet.');
       return;
@@ -266,7 +285,13 @@ export default function ManualPowManager({
     setError(null);
 
     try {
-      await saveStagedManualPowItems(projectId, laborLocation, stagedTemplates);
+      await saveStagedManualPowItems(
+        projectId,
+        laborLocation,
+        manualConfig?.laborVersion || '',
+        manualConfig?.district || district || '',
+        stagedTemplates,
+      );
 
       await onReload({ silent: true });
       closeTemplateModal();
@@ -289,6 +314,11 @@ export default function ManualPowManager({
       setBulkError('Set a labor rate location for Manual Program of Works.');
       return;
     }
+    if (!manualConfig?.laborVersion) {
+      setBulkError('Set a labor version for Manual Program of Works.');
+      openConfigModal();
+      return;
+    }
 
     const quantity = Number(quickQuantities[template._id] ?? 1);
     if (!quantity || quantity <= 0) {
@@ -302,7 +332,7 @@ export default function ManualPowManager({
     setError(null);
 
     try {
-      await saveStagedManualPowItems(projectId, laborLocation, [{
+      await saveStagedManualPowItems(projectId, laborLocation, manualConfig?.laborVersion || '', manualConfig?.district || district || '', [{
         _id: template._id,
         payItemNumber: template.payItemNumber,
         payItemDescription: template.payItemDescription,
@@ -385,10 +415,10 @@ export default function ManualPowManager({
           )}
           {manualConfig?.laborLocation ? (
             <p className="mt-1 text-xs text-blue-700">
-              Labor rates: {manualConfig.laborLocation} • CMPD: {manualConfig.cmpdVersion || 'Project Default'}
+              Labor rates: {manualConfig.laborLocation} • Labor Version: {manualConfig.laborVersion || 'Latest'} • CMPD: {manualConfig.cmpdVersion || 'Project Default'}
             </p>
           ) : (
-            <p className="mt-1 text-xs text-red-600">Configure Manual POW (labor location & CMPD) before staging DUPA templates.</p>
+            <p className="mt-1 text-xs text-red-600">Configure Manual POW (labor location, labor version, and CMPD) before staging DUPA templates.</p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -519,8 +549,10 @@ export default function ManualPowManager({
         configForm={configForm}
         district={district}
         laborLocations={laborLocations}
+        laborVersionOptions={laborVersionOptions}
         cmpdOptions={cmpdOptions}
         loadingLaborLocations={loadingLaborLocations}
+        loadingLaborVersions={loadingLaborVersions}
         loadingCmpdVersions={loadingCmpdVersions}
         configLoading={configLoading}
         configError={configError}

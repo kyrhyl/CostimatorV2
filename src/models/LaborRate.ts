@@ -3,6 +3,12 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ILaborRate extends Document {
   location: string;
   district: string;
+  laborVersion?: string;
+  validFrom?: Date;
+  validTo?: Date;
+  status?: 'draft' | 'published' | 'archived';
+  isActive?: boolean;
+  publishedAt?: Date | null;
   foreman: number;
   leadman: number;
   equipmentOperatorHeavy: number;
@@ -27,6 +33,35 @@ const LaborRateSchema = new Schema<ILaborRate>(
       type: String,
       required: true,
       default: 'Bukidnon 1st'
+    },
+    laborVersion: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    validFrom: {
+      type: Date,
+      default: null,
+    },
+    validTo: {
+      type: Date,
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: ['draft', 'published', 'archived'],
+      default: 'published',
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    publishedAt: {
+      type: Date,
+      default: null,
     },
     foreman: {
       type: Number,
@@ -86,5 +121,6 @@ const LaborRateSchema = new Schema<ILaborRate>(
 // Index for faster searches
 LaborRateSchema.index({ location: 1 });
 LaborRateSchema.index({ district: 1 });
+LaborRateSchema.index({ location: 1, district: 1, laborVersion: 1 }, { unique: true, sparse: true });
 
 export default mongoose.models.LaborRate || mongoose.model<ILaborRate>('LaborRate', LaborRateSchema);

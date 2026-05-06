@@ -13,11 +13,11 @@ import { z } from 'zod';
 // ============================================================================
 
 const UpdateMaterialSchema = z.object({
-  materialCode: z.string().min(1, 'Material code is required').toUpperCase().optional(),
-  materialDescription: z.string().min(1, 'Material description is required').optional(),
-  unit: z.string().min(1, 'Unit is required').toUpperCase().optional(),
-  basePrice: z.number().min(0, 'Base price must be non-negative').optional(),
-  category: z.string().optional(),
+  materialCode: z.string().trim().min(1, 'Material code is required').transform((v) => v.toUpperCase()).optional(),
+  works: z.string().trim().min(1, 'Works is required').transform((v) => v.toUpperCase()).optional(),
+  materialDescription: z.string().trim().min(1, 'Material description is required').transform((v) => v.replace(/\s+/g, ' ')).optional(),
+  unit: z.string().trim().min(1, 'Unit is required').transform((v) => v.toUpperCase()).optional(),
+  category: z.string().trim().min(1, 'Category is required').transform((v) => v.toUpperCase()).optional(),
   includeHauling: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });

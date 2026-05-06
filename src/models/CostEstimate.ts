@@ -105,6 +105,7 @@ export interface IEstimateLine {
 
 export interface ILaborRateSnapshot {
   location: string;
+  laborVersion?: string;
   effectiveDate: Date;
   rates: {
     foreman?: number;
@@ -137,6 +138,7 @@ export interface ICostEstimate extends Document {
   location: string;                  // For labor rates
   district: string;
   cmpdVersion: string;               // e.g., "CMPD-2024-Q1"
+  laborVersion?: string;             // e.g., "LR-2026-Q2"
   effectiveDate: Date;               // Price snapshot date
   
   // Markup Configuration
@@ -343,6 +345,12 @@ const CostEstimateSchema = new Schema<ICostEstimate>(
       required: true,
       trim: true,
       index: true
+    },
+    laborVersion: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
     },
     effectiveDate: { 
       type: Date, 

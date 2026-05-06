@@ -79,6 +79,7 @@ export interface IProject extends Document {
   projectLocation: string;
   district: string;
   cmpdVersion?: string; // Selected CMPD version for pricing (e.g., "CMPD-2024-Q1")
+  laborVersion?: string; // Selected labor version for pricing (e.g., "LR-2026-Q2")
   implementingOffice: string;
   appropriation: number;
   contractId?: string;
@@ -92,6 +93,7 @@ export interface IProject extends Document {
   manualPowConfig?: {
     laborLocation?: string;
     cmpdVersion?: string;
+    laborVersion?: string;
     district?: string;
     vatPercentage?: number;
     notes?: string;
@@ -514,6 +516,10 @@ const ProjectSchema = new Schema<IProject>(
       default: 'Bukidnon 1st',
     },
     cmpdVersion: {
+      type: String,
+      default: '',
+    },
+    laborVersion: {
       type: String,
       default: '',
     },

@@ -18,6 +18,7 @@ interface CalculateEstimateOptions {
   takeoffVersionId: string | mongoose.Types.ObjectId;
   location: string;
   district: string;
+  laborVersion?: string;
   cmpdVersion?: string;  // When provided, will lookup MaterialPrice for CMPD or canvass prices
   ocmPercentage?: number;  // Optional - will auto-calculate from project cost if not provided
   cpPercentage?: number;   // Optional - will auto-calculate from project cost if not provided
@@ -62,7 +63,11 @@ export async function calculateEstimate(
 ): Promise<EstimateResult> {
   
   // 1. Fetch labor rates for location
-  const laborRates = await LaborRate.findOne({ location: options.location })
+  const laborQuery: Record<string, unknown> = { location: options.location };
+  if (options.district) laborQuery.district = options.district;
+  if (options.laborVersion) laborQuery.laborVersion = options.laborVersion;
+
+  const laborRates = await LaborRate.findOne(laborQuery)
     .sort({ effectiveDate: -1 })
     .lean() as ILaborRate | null;
   
@@ -301,6 +306,7 @@ export async function calculateEstimate(
     estimateLines,
     laborRateSnapshot: {
       location: options.location,
+      laborVersion: (laborRates as ILaborRate).laborVersion || options.laborVersion || '',
       effectiveDate: (laborRates as ILaborRate).effectiveDate,
       rates: {
         foreman: (laborRates as ILaborRate).foreman,

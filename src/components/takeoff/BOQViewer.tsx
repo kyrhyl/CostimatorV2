@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { BOQLine, TakeoffLine } from '@/types';
 import { classifyDPWHItem, sortDPWHParts } from '@/lib/dpwhClassification';
 import SaveBOQModal from './SaveBOQModal';
@@ -84,9 +84,32 @@ export default function BOQViewer({ projectId, takeoffLines }: BOQViewerProps) {
    const [calcRunData, setCalcRunData] = useState<CalcRun | null>(null);
    
    // Save BOQ modal state
-   const [showSaveModal, setShowSaveModal] = useState(false);
-   const [hasExistingBOQ, setHasExistingBOQ] = useState(false);
-   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [hasExistingBOQ, setHasExistingBOQ] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+    const ROW_BATCH = 150;
+    const [visibleLineCount, setVisibleLineCount] = useState(ROW_BATCH);
+
+    useEffect(() => {
+      setVisibleLineCount(ROW_BATCH);
+    }, [projectId, filterType, boqLines.length]);
+
+    const filteredLinesAll = useMemo(() => {
+      if (filterType === 'all') return boqLines;
+      return boqLines.filter(line => {
+        const dpwhTag = line.tags.find(tag => tag.startsWith('dpwh:'));
+        const dpwhItemNo = dpwhTag ? dpwhTag.replace('dpwh:', '') : (line.dpwhItemNumberRaw || '');
+        const tradeTag = line.tags.find(tag => tag.startsWith('trade:'));
+        const category = tradeTag ? tradeTag.replace('trade:', '') : '';
+        const classification = classifyDPWHItem(dpwhItemNo, category);
+        return classification.part === filterType;
+      });
+    }, [boqLines, filterType]);
+
+    const visibleFilteredLines = useMemo(
+      () => filteredLinesAll.slice(0, visibleLineCount),
+      [filteredLinesAll, visibleLineCount]
+    );
 
   // Load calc runs and latest BOQ on mount
   useEffect(() => {
@@ -888,6 +911,11 @@ export default function BOQViewer({ projectId, takeoffLines }: BOQViewerProps) {
               </select>
             </div>
           </div>
+          {filteredLinesAll.length > visibleFilteredLines.length && (
+            <div className="border-b border-gray-200 bg-gray-50 px-6 py-2 text-xs text-gray-600">
+              Showing {visibleFilteredLines.length.toLocaleString()} of {filteredLinesAll.length.toLocaleString()} items
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -911,20 +939,10 @@ export default function BOQViewer({ projectId, takeoffLines }: BOQViewerProps) {
                 {(() => {
                   const rows: React.ReactElement[] = [];
                   
-                  // Filter BOQ lines by selected DPWH Part
-                  const filteredLines = filterType === 'all' ? boqLines : boqLines.filter(line => {
-                    const dpwhTag = line.tags.find(tag => tag.startsWith('dpwh:'));
-                    const dpwhItemNo = dpwhTag ? dpwhTag.replace('dpwh:', '') : (line.dpwhItemNumberRaw || '');
-                    const tradeTag = line.tags.find(tag => tag.startsWith('trade:'));
-                    const category = tradeTag ? tradeTag.replace('trade:', '') : '';
-                    const classification = classifyDPWHItem(dpwhItemNo, category);
-                    return classification.part === filterType;
-                  });
-                  
                   // Group lines by DPWH Part and Subcategory
                   const byPartAndSubcategory: Record<string, Record<string, BOQLine[]>> = {};
                   
-                  filteredLines.forEach(line => {
+                  visibleFilteredLines.forEach(line => {
                     const dpwhTag = line.tags.find(tag => tag.startsWith('dpwh:'));
                     const dpwhItemNo = dpwhTag ? dpwhTag.replace('dpwh:', '') : (line.dpwhItemNumberRaw || '');
                     const tradeTag = line.tags.find(tag => tag.startsWith('trade:'));
@@ -1194,6 +1212,17 @@ export default function BOQViewer({ projectId, takeoffLines }: BOQViewerProps) {
               </tbody>
             </table>
           </div>
+          {filteredLinesAll.length > visibleFilteredLines.length && (
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-3 text-center">
+              <button
+                type="button"
+                onClick={() => setVisibleLineCount((prev) => prev + ROW_BATCH)}
+                className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                Load more BOQ items ({(filteredLinesAll.length - visibleFilteredLines.length).toLocaleString()} remaining)
+              </button>
+            </div>
+          )}
         </div>
       )}
       

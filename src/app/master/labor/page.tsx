@@ -6,6 +6,10 @@ interface LaborRate {
   _id: string;
   location: string;
   district: string;
+  laborVersion?: string;
+  status?: 'draft' | 'published' | 'archived';
+  validFrom?: string;
+  validTo?: string;
   foreman: number;
   leadman: number;
   equipmentOperatorHeavy: number;
@@ -20,17 +24,33 @@ interface LaborRate {
   updatedAt: string;
 }
 
+interface LaborVersionSummary {
+  laborVersion: string;
+  status: string;
+  district?: string | null;
+  records: number;
+}
+
 export default function LaborRatesPage() {
   const [laborRates, setLaborRates] = useState<LaborRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
+  const [laborVersionFilter, setLaborVersionFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [versionOptions, setVersionOptions] = useState<LaborVersionSummary[]>([]);
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  const [isCustomLocation, setIsCustomLocation] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingRate, setEditingRate] = useState<LaborRate | null>(null);
   const [formData, setFormData] = useState({
     location: '',
     district: 'Bukidnon 1st',
+    laborVersion: '',
+    status: 'draft' as 'draft' | 'published' | 'archived',
+    validFrom: '',
+    validTo: '',
     foreman: 0,
     leadman: 0,
     equipmentOperatorHeavy: 0,
@@ -44,7 +64,42 @@ export default function LaborRatesPage() {
 
   useEffect(() => {
     fetchLaborRates();
-  }, [searchTerm, locationFilter]);
+  }, [searchTerm, locationFilter, laborVersionFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchVersions();
+    fetchLocationOptions();
+  }, []);
+
+  const fetchLocationOptions = async () => {
+    try {
+      const response = await fetch('/api/master/labor');
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        const unique = [...new Set(result.data.map((r: LaborRate) => String(r.location || '').trim()).filter(Boolean))].sort() as string[];
+        setLocationOptions(unique);
+      }
+    } catch (err) {
+      console.error('Failed to fetch location options', err);
+    }
+  };
+
+  const fetchVersions = async () => {
+    try {
+      const response = await fetch('/api/master/labor/versions');
+      const result = await response.json();
+      if (result.success) {
+        const versions = (result.versions || []).filter((v: LaborVersionSummary) => v.laborVersion !== 'UNVERSIONED');
+        setVersionOptions(versions);
+        if (!laborVersionFilter && versions.length > 0) {
+          const published = versions.find((v: LaborVersionSummary) => v.status === 'published');
+          setLaborVersionFilter((published || versions[0]).laborVersion);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch labor versions', err);
+    }
+  };
 
   const fetchLaborRates = async () => {
     try {
@@ -52,6 +107,8 @@ export default function LaborRatesPage() {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (locationFilter) params.append('location', locationFilter);
+      if (laborVersionFilter) params.append('laborVersion', laborVersionFilter);
+      if (statusFilter) params.append('status', statusFilter);
       
       const response = await fetch(`/api/master/labor?${params}`);
       
@@ -101,6 +158,7 @@ export default function LaborRatesPage() {
         setEditingRate(null);
         resetForm();
         fetchLaborRates();
+        fetchVersions();
       } else {
         alert(result.error || 'Failed to save labor rate');
       }
@@ -111,9 +169,14 @@ export default function LaborRatesPage() {
 
   const handleEdit = (rate: LaborRate) => {
     setEditingRate(rate);
+    setIsCustomLocation(!locationOptions.includes(rate.location));
     setFormData({
       location: rate.location,
       district: rate.district,
+      laborVersion: rate.laborVersion || '',
+      status: (rate.status || 'draft') as 'draft' | 'published' | 'archived',
+      validFrom: rate.validFrom ? new Date(rate.validFrom).toISOString().slice(0, 10) : '',
+      validTo: rate.validTo ? new Date(rate.validTo).toISOString().slice(0, 10) : '',
       foreman: rate.foreman,
       leadman: rate.leadman,
       equipmentOperatorHeavy: rate.equipmentOperatorHeavy,
@@ -152,9 +215,14 @@ export default function LaborRatesPage() {
   };
 
   const resetForm = () => {
+    setIsCustomLocation(false);
     setFormData({
       location: '',
       district: 'Bukidnon 1st',
+      laborVersion: laborVersionFilter || '',
+      status: 'draft',
+      validFrom: '',
+      validTo: '',
       foreman: 0,
       leadman: 0,
       equipmentOperatorHeavy: 0,
@@ -169,6 +237,52 @@ export default function LaborRatesPage() {
 
   const locations = [...new Set(laborRates.map(r => r.location))].sort();
 
+  const handleAddNewLaborRate = () => {
+    let nextVersion = laborVersionFilter;
+    if (!nextVersion) {
+      nextVersion = window.prompt('Enter labor quarter/version (e.g., LR-2026-Q3):', '')?.trim() || '';
+      if (!nextVersion) return;
+      setLaborVersionFilter(nextVersion);
+    }
+
+    setEditingRate(null);
+    resetForm();
+    setFormData((prev) => ({ ...prev, laborVersion: nextVersion }));
+    setIsCustomLocation(false);
+    setShowForm(true);
+  };
+
+  const handleArchiveVersion = async () => {
+    if (!laborVersionFilter) {
+      alert('Select a labor version first.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Archive labor version ${laborVersionFilter}?\n\nThis keeps records for audit but removes it from active use.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch('/api/master/labor/versions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'archive', laborVersion: laborVersionFilter }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to archive version');
+      }
+      await fetchLaborRates();
+      await fetchVersions();
+      alert(result.message || 'Labor version archived');
+    } catch (err: any) {
+      alert(err.message || 'Failed to archive version');
+    }
+  };
+
+  const selectedVersionMeta = versionOptions.find((v) => v.laborVersion === laborVersionFilter) || null;
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -178,7 +292,7 @@ export default function LaborRatesPage() {
 
       {/* Filters and Actions */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Search
@@ -207,14 +321,40 @@ export default function LaborRatesPage() {
               ))}
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Labor Version</label>
+            <select
+              value={laborVersionFilter}
+              onChange={(e) => setLaborVersionFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Versions</option>
+              {versionOptions.map((version) => (
+                <option key={version.laborVersion} value={version.laborVersion}>
+                  {version.laborVersion} ({version.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
           
           <div className="flex items-end">
             <button
-              onClick={() => {
-                setEditingRate(null);
-                resetForm();
-                setShowForm(true);
-              }}
+              onClick={handleAddNewLaborRate}
               className="w-full bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
             >
               + Add New Labor Rate
@@ -224,6 +364,18 @@ export default function LaborRatesPage() {
         
         <div className="text-sm text-gray-500">
           Total: {laborRates.length} labor rate{laborRates.length !== 1 ? 's' : ''}
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="text-xs text-gray-600">
+            Selected Version Status: {selectedVersionMeta?.status || 'N/A'}
+          </div>
+          <button
+            onClick={handleArchiveVersion}
+            disabled={!laborVersionFilter}
+            className="bg-slate-700 text-white px-3 py-1.5 rounded-md text-xs hover:bg-slate-800 disabled:opacity-50"
+          >
+            Archive Selected Version
+          </button>
         </div>
       </div>
 
@@ -242,14 +394,45 @@ export default function LaborRatesPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Location *
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., Manila, Cebu, Davao"
-                    />
+                    {!isCustomLocation ? (
+                      <select
+                        required
+                        value={formData.location}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setFormData({ ...formData, location: '' });
+                            setIsCustomLocation(true);
+                            return;
+                          }
+                          setFormData({ ...formData, location: e.target.value });
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select location...</option>
+                        {locationOptions.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                        <option value="__custom__">+ Add new location</option>
+                      </select>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          required
+                          value={formData.location}
+                          onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          placeholder="Enter new location"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsCustomLocation(false)}
+                          className="text-xs text-blue-700 hover:text-blue-900"
+                        >
+                          Choose from existing locations
+                        </button>
+                      </div>
+                    )}
                   </div>
                   
                   <div>
@@ -261,6 +444,53 @@ export default function LaborRatesPage() {
                       required
                       value={formData.district}
                       onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Labor Version *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.laborVersion}
+                      onChange={(e) => setFormData({ ...formData, laborVersion: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., LR-2026-Q2"
+                      readOnly={!editingRate}
+                    />
+                    {!editingRate && <p className="mt-1 text-xs text-gray-500">Quarter is locked to selected version when adding new labor rates.</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as 'draft' | 'published' | 'archived' })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid From</label>
+                    <input
+                      type="date"
+                      value={formData.validFrom}
+                      onChange={(e) => setFormData({ ...formData, validFrom: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid To</label>
+                    <input
+                      type="date"
+                      value={formData.validTo}
+                      onChange={(e) => setFormData({ ...formData, validTo: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -442,6 +672,12 @@ export default function LaborRatesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     District
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Version
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Foreman
                   </th>
@@ -470,6 +706,20 @@ export default function LaborRatesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {rate.district}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {rate.laborVersion || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        rate.status === 'published'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : rate.status === 'archived'
+                            ? 'bg-slate-100 text-slate-700'
+                            : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {rate.status || 'draft'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                       ₱{rate.foreman.toFixed(2)}
