@@ -1,60 +1,57 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-
-interface MaterialPrice {
-  _id: string;
-  materialCode: string;
-  description: string;
-  unit: string;
-  location: string;
-  district?: string;
-  unitCost: number;
-  priceSource?: 'cmpd' | 'canvass';
-  brand?: string;
-  specification?: string;
-  supplier?: string;
-  effectiveDate: string;
-  cmpd_version?: string;
-  isActive?: boolean;
-  importBatch?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Material {
-  _id: string;
-  materialCode: string;
-  works: string;
-  materialDescription: string;
-  unit: string;
-  category?: string;
-  includeHauling: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface MissingCoverageMaterial {
-  materialCode: string;
-  description: string;
-  unit: string;
-  category: string;
-}
-
-interface CoverageData {
-  district: string;
-  cmpd_version: string;
-  location?: string;
-  totalMaterials: number;
-  cmpdCount: number;
-  canvassOnlyCount: number;
-  missingCount: number;
-  coveragePercent: number;
-  missingMaterials: MissingCoverageMaterial[];
-}
+import {
+  CoverageData,
+  MISSING_TOKEN,
+  Material,
+  MaterialPrice,
+  MissingCoverageMaterial,
+  createInitialBaseMaterialForm,
+  createInitialCanvassForm,
+  createInitialEditForm,
+  createInitialImportData,
+  getTodayIso,
+} from './cmpd-utils';
 
 export default function CMPDPage() {
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
+
+  type ImportSummary = {
+    totalRows?: number;
+    validRows?: number;
+    invalidRows?: number;
+    imported?: number;
+    updated?: number;
+    skipped?: number;
+    duplicates?: number;
+    district?: string;
+    cmpd_version?: string;
+    importBatch?: string;
+    deactivatedOldPrices?: boolean;
+    invalidCodes?: string[];
+  };
+
+  const refreshPricesAndCoverage = () => {
+    fetchPrices();
+    fetchCoverage();
+  };
+
+  const patchBaseMaterial = async (materialId: string, payload: Record<string, unknown>, fallbackError: string) => {
+    const response = await fetch(`/api/master/materials/${materialId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || fallbackError);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'prices' | 'base-material'>('prices');
   const [prices, setPrices] = useState<MaterialPrice[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -71,19 +68,11 @@ export default function CMPDPage() {
   const [baseImportError, setBaseImportError] = useState('');
   const [baseImportDetails, setBaseImportDetails] = useState<string[]>([]);
   const [baseImportExpectedColumns, setBaseImportExpectedColumns] = useState<string[]>([]);
-  const [baseImportSummary, setBaseImportSummary] = useState<any>(null);
+  const [baseImportSummary, setBaseImportSummary] = useState<ImportSummary | null>(null);
   const [baseImportForm, setBaseImportForm] = useState({
     file: null as File | null,
   });
-  const [baseMaterialForm, setBaseMaterialForm] = useState({
-    materialCode: '',
-    works: '',
-    materialDescription: '',
-    unit: '',
-    category: '',
-    includeHauling: false,
-    isActive: true,
-  });
+  const [baseMaterialForm, setBaseMaterialForm] = useState(createInitialBaseMaterialForm());
   const [searchTerm, setSearchTerm] = useState('');
   const [materialSearchTerm, setMaterialSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -103,51 +92,17 @@ export default function CMPDPage() {
   const [editingPrice, setEditingPrice] = useState<MaterialPrice | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState('');
-  const [editForm, setEditForm] = useState({
-    materialCode: '',
-    description: '',
-    unit: '',
-    location: '',
-    district: '',
-    cmpd_version: '',
-    unitCost: 0,
-    priceSource: 'cmpd' as 'cmpd' | 'canvass',
-    brand: '',
-    specification: '',
-    supplier: '',
-    effectiveDate: new Date().toISOString().split('T')[0],
-    isActive: true,
-  });
-  const [importData, setImportData] = useState({
-    file: null as File | null,
-    district: '',
-    cmpd_version: '',
-    location: '',
-    effectiveDate: new Date().toISOString().split('T')[0],
-    deactivateOldPrices: false,
-    validateMaterialCodes: true,
-  });
+  const [editForm, setEditForm] = useState(createInitialEditForm());
+  const [importData, setImportData] = useState(createInitialImportData());
   const [importProgress, setImportProgress] = useState<{
     status: 'idle' | 'uploading' | 'success' | 'error';
     message: string;
-    summary?: any;
+    summary?: ImportSummary;
   }>({
     status: 'idle',
     message: '',
   });
-  const [canvassForm, setCanvassForm] = useState({
-    materialCode: '',
-    description: '',
-    unit: '',
-    unitCost: 0,
-    location: '',
-    district: '',
-    cmpd_version: '',
-    effectiveDate: new Date().toISOString().split('T')[0],
-    brand: '',
-    specification: '',
-    supplier: ''
-  });
+  const [canvassForm, setCanvassForm] = useState(createInitialCanvassForm());
   const [canvassSubmitting, setCanvassSubmitting] = useState(false);
   const [canvassError, setCanvassError] = useState('');
 
@@ -200,8 +155,8 @@ export default function CMPDPage() {
       } else {
         setError(result.error || 'Failed to fetch prices');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch prices');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch prices'));
     } finally {
       setPricesLoading(false);
     }
@@ -227,8 +182,8 @@ export default function CMPDPage() {
       } else {
         setMaterialsError(result.error || 'Failed to fetch materials');
       }
-    } catch (err: any) {
-      setMaterialsError(err.message || 'Failed to fetch materials');
+    } catch (err: unknown) {
+      setMaterialsError(getErrorMessage(err, 'Failed to fetch materials'));
     } finally {
       setMaterialsLoading(false);
     }
@@ -272,8 +227,7 @@ export default function CMPDPage() {
           message: result.message,
           summary: result.summary,
         });
-        fetchPrices();
-        fetchCoverage();
+        refreshPricesAndCoverage();
       } else {
         setImportProgress({
           status: 'error',
@@ -281,10 +235,10 @@ export default function CMPDPage() {
           summary: result,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setImportProgress({
         status: 'error',
-        message: err.message || 'Failed to import CMPD data',
+        message: getErrorMessage(err, 'Failed to import CMPD data'),
       });
     }
   };
@@ -295,7 +249,7 @@ export default function CMPDPage() {
       district: '',
       cmpd_version: '',
       location: '',
-      effectiveDate: new Date().toISOString().split('T')[0],
+      effectiveDate: getTodayIso(),
       deactivateOldPrices: false,
       validateMaterialCodes: true,
     });
@@ -306,19 +260,7 @@ export default function CMPDPage() {
   };
 
   const resetCanvassForm = () => {
-    setCanvassForm({
-      materialCode: '',
-      description: '',
-      unit: '',
-      unitCost: 0,
-      location: '',
-      district: '',
-      cmpd_version: '',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      brand: '',
-      specification: '',
-      supplier: ''
-    });
+    setCanvassForm(createInitialCanvassForm());
     setCanvassError('');
   };
 
@@ -329,9 +271,9 @@ export default function CMPDPage() {
       unit: material.unit,
       unitCost: 0,
       location: '',
-      district: districtFilter && districtFilter !== '__missing__' ? districtFilter : '',
-      cmpd_version: versionFilter && versionFilter !== '__missing__' ? versionFilter : '',
-      effectiveDate: new Date().toISOString().split('T')[0],
+      district: districtFilter && districtFilter !== MISSING_TOKEN ? districtFilter : '',
+      cmpd_version: versionFilter && versionFilter !== MISSING_TOKEN ? versionFilter : '',
+      effectiveDate: getTodayIso(),
       brand: '',
       specification: '',
       supplier: '',
@@ -343,14 +285,14 @@ export default function CMPDPage() {
   const jumpToMissingPrices = () => {
     setPriceSourceFilter('missing');
     setShowAllMissingMaterials(true);
-    if (!districtFilter || !versionFilter || districtFilter === '__missing__' || versionFilter === '__missing__') {
+    if (!districtFilter || !versionFilter || districtFilter === MISSING_TOKEN || versionFilter === MISSING_TOKEN) {
       setCoverageError('Select a specific District and CMPD Version to view missing prices.');
     }
     coverageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const fetchCoverage = async () => {
-    if (!districtFilter || !versionFilter || districtFilter === '__missing__' || versionFilter === '__missing__') {
+    if (!districtFilter || !versionFilter || districtFilter === MISSING_TOKEN || versionFilter === MISSING_TOKEN) {
       setCoverageData(null);
       setCoverageError('');
       return;
@@ -372,24 +314,16 @@ export default function CMPDPage() {
 
       setCoverageData(result.data || null);
       setShowAllMissingMaterials(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCoverageData(null);
-      setCoverageError(err.message || 'Failed to load coverage');
+      setCoverageError(getErrorMessage(err, 'Failed to load coverage'));
     } finally {
       setCoverageLoading(false);
     }
   };
 
   const resetBaseMaterialForm = () => {
-    setBaseMaterialForm({
-      materialCode: '',
-      works: '',
-      materialDescription: '',
-      unit: '',
-      category: '',
-      includeHauling: false,
-      isActive: true,
-    });
+    setBaseMaterialForm(createInitialBaseMaterialForm());
     setBaseMaterialError('');
     setEditingMaterial(null);
   };
@@ -447,8 +381,8 @@ export default function CMPDPage() {
       setShowBaseMaterialModal(false);
       resetBaseMaterialForm();
       fetchMaterials();
-    } catch (err: any) {
-      setBaseMaterialError(err.message || 'Failed to save base material');
+    } catch (err: unknown) {
+      setBaseMaterialError(getErrorMessage(err, 'Failed to save base material'));
     } finally {
       setBaseMaterialSubmitting(false);
     }
@@ -465,42 +399,26 @@ export default function CMPDPage() {
         throw new Error(result.error || 'Failed to delete base material');
       }
       fetchMaterials();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete base material');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete base material'));
     }
   };
 
   const toggleBaseMaterialHauling = async (material: Material) => {
     try {
-      const response = await fetch(`/api/master/materials/${material._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ includeHauling: !material.includeHauling }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to update hauling');
-      }
+      await patchBaseMaterial(material._id, { includeHauling: !material.includeHauling }, 'Failed to update hauling');
       fetchMaterials();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update hauling');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update hauling'));
     }
   };
 
   const toggleBaseMaterialStatus = async (material: Material) => {
     try {
-      const response = await fetch(`/api/master/materials/${material._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !material.isActive }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to update status');
-      }
+      await patchBaseMaterial(material._id, { isActive: !material.isActive }, 'Failed to update status');
       fetchMaterials();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update status');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update status'));
     }
   };
 
@@ -540,8 +458,8 @@ export default function CMPDPage() {
 
       setBaseImportSummary(result.summary || null);
       await fetchMaterials();
-    } catch (err: any) {
-      setBaseImportError(err.message || 'Failed to import base materials');
+    } catch (err: unknown) {
+      setBaseImportError(getErrorMessage(err, 'Failed to import base materials'));
     } finally {
       setBaseImportSubmitting(false);
     }
@@ -562,7 +480,7 @@ export default function CMPDPage() {
       brand: price.brand || '',
       specification: price.specification || '',
       supplier: price.supplier || '',
-      effectiveDate: price.effectiveDate ? new Date(price.effectiveDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      effectiveDate: price.effectiveDate ? new Date(price.effectiveDate).toISOString().split('T')[0] : getTodayIso(),
       isActive: Boolean(price.isActive),
     });
     setShowEditPriceModal(true);
@@ -599,10 +517,9 @@ export default function CMPDPage() {
       }
       setShowEditPriceModal(false);
       setEditingPrice(null);
-      fetchPrices();
-      fetchCoverage();
-    } catch (err: any) {
-      setEditError(err.message || 'Failed to update material price');
+      refreshPricesAndCoverage();
+    } catch (err: unknown) {
+      setEditError(getErrorMessage(err, 'Failed to update material price'));
     } finally {
       setEditSubmitting(false);
     }
@@ -642,10 +559,9 @@ export default function CMPDPage() {
 
       resetCanvassForm();
       setShowCanvassModal(false);
-      fetchPrices();
-      fetchCoverage();
-    } catch (err: any) {
-      setCanvassError(err.message || 'Failed to create canvass price');
+      refreshPricesAndCoverage();
+    } catch (err: unknown) {
+      setCanvassError(getErrorMessage(err, 'Failed to create canvass price'));
     } finally {
       setCanvassSubmitting(false);
     }
@@ -653,10 +569,10 @@ export default function CMPDPage() {
 
   const displayedPrices = useMemo(() => {
     return prices.filter((price) => {
-      if (districtFilter && districtFilter !== '__missing__' && (price.district || '').trim() !== districtFilter) return false;
-      if (districtFilter === '__missing__' && price.district?.trim()) return false;
-      if (versionFilter && versionFilter !== '__missing__' && (price.cmpd_version || '').trim() !== versionFilter) return false;
-      if (versionFilter === '__missing__' && price.cmpd_version?.trim()) return false;
+      if (districtFilter && districtFilter !== MISSING_TOKEN && (price.district || '').trim() !== districtFilter) return false;
+      if (districtFilter === MISSING_TOKEN && price.district?.trim()) return false;
+      if (versionFilter && versionFilter !== MISSING_TOKEN && (price.cmpd_version || '').trim() !== versionFilter) return false;
+      if (versionFilter === MISSING_TOKEN && price.cmpd_version?.trim()) return false;
       if (priceSourceFilter === 'missing') return false;
       if (priceSourceFilter !== 'all' && (price.priceSource || 'cmpd') !== priceSourceFilter) return false;
       return true;
@@ -682,12 +598,16 @@ export default function CMPDPage() {
     );
   }, [materials, selectedMaterialCategory]);
 
-  const districts = [...new Set(prices.map(p => p.district).filter(Boolean))];
+  const districts = useMemo(
+    () => [...new Set(prices.map((p) => p.district).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))),
+    [prices]
+  );
 
   return (
     <div className="container mx-auto px-4 py-8" suppressHydrationWarning>
       <div className="mb-8">
         <h1 className="text-2xl font-bold">CMPD Management</h1>
+        <p className="mt-1 text-sm text-gray-600">Manage semi-annual CMPD imports, monitor pricing coverage, and fill gaps through canvass entries.</p>
       </div>
 
       <div className="mb-6 border-b border-gray-200">
@@ -744,7 +664,7 @@ export default function CMPDPage() {
                   className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All Districts</option>
-                  <option value="__missing__">Missing District</option>
+                  <option value={MISSING_TOKEN}>Missing District</option>
                   {districts.map(dist => (
                     <option key={dist} value={dist}>{dist}</option>
                   ))}
@@ -761,7 +681,7 @@ export default function CMPDPage() {
                   className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All Versions</option>
-                  <option value="__missing__">Missing Version</option>
+                  <option value={MISSING_TOKEN}>Missing Version</option>
                   {versionOptions.map(ver => (
                     <option key={ver} value={ver}>{ver}</option>
                   ))}
@@ -964,13 +884,8 @@ export default function CMPDPage() {
                     <tr>
                       <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Material Code</th>
                       <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Description</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">District</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">CMPD Version</th>
                       <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Unit</th>
                       <th className="px-3 py-2.5 text-right text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Unit Cost</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Source</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Brand</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Effective Date</th>
                       <th className="px-3 py-2.5 text-center text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Status</th>
                       <th className="px-3 py-2.5 text-center text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Actions</th>
                     </tr>
@@ -984,30 +899,11 @@ export default function CMPDPage() {
                         <td className="px-3 py-2.5 max-w-[300px]">
                           <div className="text-sm text-gray-900 truncate" title={price.description}>{price.description}</div>
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">
-                          <span className="inline-flex px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[11px] font-semibold">
-                            {price.district || '-'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-600">
-                          {price.cmpd_version || '-'}
-                        </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500">
                           {price.unit}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-right text-sm font-medium text-gray-900">
                           ₱{Number(price.unitCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500">
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] font-medium">
-                            {price.priceSource || 'cmpd'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500">
-                          {price.brand || '-'}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(price.effectiveDate).toLocaleDateString()}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-center">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -1232,7 +1128,7 @@ export default function CMPDPage() {
                         <div>Valid Rows: {importProgress.summary.validRows}</div>
                         <div>Invalid Rows: {importProgress.summary.invalidRows}</div>
                         <div>Successfully Imported: {importProgress.summary.imported}</div>
-                        {importProgress.summary.duplicates > 0 && (
+                        {(importProgress.summary.duplicates ?? 0) > 0 && (
                           <div>Duplicates Skipped: {importProgress.summary.duplicates}</div>
                         )}
                         <div>District: {importProgress.summary.district}</div>

@@ -10,11 +10,39 @@ import Material from '@/models/Material';
 import Papa from 'papaparse';
 import { z } from 'zod';
 
+type ParsedCmpdRow = {
+  materialCode: string;
+  description?: string;
+  unit?: string;
+  unitCost: number;
+  brand?: string;
+  specification?: string;
+  supplier?: string;
+  _rowIndex: number;
+};
+
+type MaterialMasterRow = {
+  materialCode: string;
+  materialDescription: string;
+  unit: string;
+};
+
+type ImportMetadata = z.infer<typeof CMPDImportSchema>;
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
 function normalizeSpecialChars(value: string): string {
   return value
     .replace(/\uFFFD/g, 'φ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function parseUnitCost(value: unknown): number {
+  return parseFloat(String(value || '').replace(/,/g, '')) || 0;
 }
 
 // ============================================================================
@@ -47,7 +75,7 @@ const CMPDImportSchema = z.object({
 /**
  * Parse CSV file buffer to JSON rows
  */
-function parseFileBuffer(buffer: Buffer): Promise<any[]> {
+function parseFileBuffer(buffer: Buffer): Promise<ParsedCmpdRow[]> {
   return new Promise((resolve, reject) => {
     const text = buffer.toString('utf-8');
 
@@ -85,26 +113,26 @@ function parseFileBuffer(buffer: Buffer): Promise<any[]> {
           return reject(new Error(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`));
         }
 
-        const rows = (results.data as any[]) || [];
+        const rows = (results.data as Record<string, unknown>[]) || [];
         const hasExpectedHeaders = rows.length > 0 && Object.keys(rows[0]).some((k) => {
           const normalizedKey = String(k).toLowerCase().trim();
           return Object.prototype.hasOwnProperty.call(columnMap, normalizedKey);
         });
 
         if (hasExpectedHeaders) {
-          const mappedRows = rows.map((row: any, index) => {
-            const mapped: any = {};
+          const mappedRows = rows.map((row: Record<string, unknown>, index) => {
+            const mapped: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(row)) {
               const normalizedKey = String(key).toLowerCase().trim();
               const mappedKey = columnMap[normalizedKey] || key;
               if (mappedKey === 'unitCost') {
-                mapped[mappedKey] = parseFloat(String(value || '').replace(/,/g, '')) || 0;
+                mapped[mappedKey] = parseUnitCost(value);
               } else {
                 mapped[mappedKey] = typeof value === 'string' ? normalizeSpecialChars(value) : (value || '');
               }
             }
             mapped._rowIndex = index + 2;
-            return mapped;
+            return mapped as ParsedCmpdRow;
           });
           resolve(mappedRows);
           return;
@@ -119,16 +147,19 @@ function parseFileBuffer(buffer: Buffer): Promise<any[]> {
               return reject(new Error(`CSV parsing errors: ${fallback.errors.map(e => e.message).join(', ')}`));
             }
 
-            const mappedRows = ((fallback.data as any[]) || []).map((cols: any[], index) => ({
-              materialCode: normalizeSpecialChars(String(cols?.[0] || '')),
-              description: normalizeSpecialChars(String(cols?.[1] || '')),
-              unit: normalizeSpecialChars(String(cols?.[2] || '')),
-              unitCost: parseFloat(String(cols?.[3] || '').replace(/,/g, '')) || 0,
-              brand: normalizeSpecialChars(String(cols?.[4] || '')),
-              specification: normalizeSpecialChars(String(cols?.[5] || '')),
-              supplier: normalizeSpecialChars(String(cols?.[6] || '')),
+            const mappedRows = ((fallback.data as unknown[]) || []).map((cols: unknown, index) => {
+              const values = Array.isArray(cols) ? cols : [];
+              return {
+              materialCode: normalizeSpecialChars(String(values?.[0] || '')),
+              description: normalizeSpecialChars(String(values?.[1] || '')),
+              unit: normalizeSpecialChars(String(values?.[2] || '')),
+              unitCost: parseUnitCost(values?.[3]),
+              brand: normalizeSpecialChars(String(values?.[4] || '')),
+              specification: normalizeSpecialChars(String(values?.[5] || '')),
+              supplier: normalizeSpecialChars(String(values?.[6] || '')),
               _rowIndex: index + 1,
-            }));
+            };
+            }) as ParsedCmpdRow[];
 
             resolve(mappedRows);
           },
@@ -231,12 +262,12 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
     
     // Parse file
-    let rows: any[];
+    let rows: ParsedCmpdRow[];
     try {
-      rows = await parseFileBuffer(buffer) as any[];
-    } catch (error: any) {
+      rows = await parseFileBuffer(buffer);
+    } catch (error: unknown) {
       return NextResponse.json(
-        { success: false, error: error.message },
+        { success: false, error: getErrorMessage(error, 'Failed to parse import file') },
         { status: 400 }
       );
     }
@@ -253,8 +284,8 @@ export async function POST(request: NextRequest) {
     const materialMasterRows = await Material.find({ materialCode: { $in: uniqueCodes } })
       .select('materialCode materialDescription unit')
       .lean();
-    const materialMasterMap = new Map(
-      materialMasterRows.map((m: any) => [String(m.materialCode || '').trim().toUpperCase(), m])
+    const materialMasterMap = new Map<string, MaterialMasterRow>(
+      (materialMasterRows as MaterialMasterRow[]).map((m) => [String(m.materialCode || '').trim().toUpperCase(), m])
     );
 
     const normalizedRows = rows.map((row) => {
@@ -273,8 +304,8 @@ export async function POST(request: NextRequest) {
     // Validate rows
     const validationResults = {
       total: normalizedRows.length,
-      valid: [] as any[],
-      invalid: [] as any[],
+      valid: [] as Array<z.infer<typeof CMPDRowSchema> & { _rowIndex: number }>,
+      invalid: [] as ParsedCmpdRow[],
       errors: [] as string[]
     };
 
@@ -354,7 +385,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Generate import batch ID
-    const importBatch = `${validatedMetadata.cmpd_version}_${Date.now()}`;
+    const importBatch = `${(validatedMetadata as ImportMetadata).cmpd_version}_${Date.now()}`;
     
     // Deactivate old prices if requested
     if (validatedMetadata.deactivateOldPrices) {
@@ -393,11 +424,11 @@ export async function POST(request: NextRequest) {
       insertedPrices = await MaterialPrice.insertMany(materialPrices, { 
         ordered: false // Continue on duplicate key errors
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle duplicate key errors
-      if (error.code === 11000) {
+      if ((error as { code?: number }).code === 11000) {
         // Some records were duplicates but others may have been inserted
-        const insertedCount = error.insertedDocs?.length || 0;
+        const insertedCount = ((error as { insertedDocs?: unknown[] }).insertedDocs?.length) || 0;
         return NextResponse.json({
           success: true,
           message: `Partially imported ${insertedCount} of ${materialPrices.length} prices (some duplicates skipped)`,
@@ -434,10 +465,10 @@ export async function POST(request: NextRequest) {
       errors: validationResults.errors.length > 0 ? validationResults.errors : undefined
     }, { status: 201 });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/master/materials/prices/bulk-import error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to import CMPD data' },
+      { success: false, error: getErrorMessage(error, 'Failed to import CMPD data') },
       { status: 500 }
     );
   }
