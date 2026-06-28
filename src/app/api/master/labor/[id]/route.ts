@@ -44,7 +44,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };
@@ -135,20 +135,21 @@ export async function PATCH(
     
     // If updating location/version key, check for duplicates
     if (updateData.location || updateData.district || updateData.laborVersion !== undefined) {
-      const existingRecord = await LaborRate.findById(id).lean();
-      if (!existingRecord) {
-        return NextResponse.json(
-          { success: false, error: 'Labor rate not found' },
-          { status: 404 }
-        );
+      const duplicateQuery: Record<string, unknown> = {
+        _id: { $ne: id },
+      };
+
+      if (updateData.location) {
+        duplicateQuery.location = updateData.location;
+      }
+      if (updateData.district) {
+        duplicateQuery.district = updateData.district;
+      }
+      if (updateData.laborVersion !== undefined) {
+        duplicateQuery.laborVersion = updateData.laborVersion ?? null;
       }
 
-      const existing = await LaborRate.findOne({
-        location: updateData.location ?? (existingRecord as any).location,
-        district: updateData.district ?? (existingRecord as any).district,
-        laborVersion: updateData.laborVersion ?? (existingRecord as any).laborVersion ?? null,
-        _id: { $ne: id }
-      });
+      const existing = await LaborRate.findOne(duplicateQuery);
       
       if (existing) {
         return NextResponse.json(

@@ -18,7 +18,7 @@ const UpdateMaterialPriceSchema = z.object({
   unit: z.string().min(1, 'Unit is required').optional(),
   location: z.string().min(1, 'Location is required').optional(),
   district: z.string().optional(),
-  cmpd_version: z.string().min(1, 'CMPD version is required').optional(),
+  cmpd_version: z.string().optional(),
   unitCost: z.number().min(0, 'Unit cost must be non-negative').optional(),
   priceSource: z.enum(['cmpd', 'canvass']).optional(),
   isActive: z.boolean().optional(),
@@ -39,7 +39,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };
@@ -119,23 +119,6 @@ export async function PATCH(
     }
     
     const updateData = validation.data!;
-
-    const existing = await MaterialPrice.findById(id).lean();
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Material price not found' },
-        { status: 404 }
-      );
-    }
-
-    const nextPriceSource = (updateData.priceSource ?? (existing as any).priceSource ?? 'cmpd') as 'cmpd' | 'canvass';
-    const nextCmpdVersion = String(updateData.cmpd_version ?? (existing as any).cmpd_version ?? '').trim();
-    if ((nextPriceSource === 'cmpd' || nextPriceSource === 'canvass') && !nextCmpdVersion) {
-      return NextResponse.json(
-        { success: false, error: 'CMPD version is required for CMPD/Canvass prices' },
-        { status: 400 }
-      );
-    }
     
     // Check if nothing to update
     if (Object.keys(updateData).length === 0) {

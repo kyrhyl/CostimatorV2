@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           error: 'Invalid import metadata',
-          details: metadataValidation.error.errors 
+          details: metadataValidation.error.issues 
         },
         { status: 400 }
       );
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
       } else {
         validationResults.invalid.push(row);
         validationResults.errors.push(
-          `Row ${row._rowIndex}: ${validation.error.errors.map(e => e.message).join(', ')}`
+          `Row ${row._rowIndex}: ${validation.error.issues.map(e => e.message).join(', ')}`
         );
       }
     }

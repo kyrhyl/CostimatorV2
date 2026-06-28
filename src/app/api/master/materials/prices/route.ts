@@ -18,7 +18,7 @@ const MaterialPriceSchema = z.object({
   unit: z.string().min(1, 'Unit is required'),
   location: z.string().min(1, 'Location is required'),
   district: z.string().optional().default(''),
-  cmpd_version: z.string().min(1, 'CMPD version is required'),
+  cmpd_version: z.string().optional().default(''),
   unitCost: z.number().min(0, 'Unit cost must be non-negative'),
   priceSource: z.enum(['cmpd', 'canvass']).optional().default('cmpd'),
   isActive: z.boolean().optional().default(true),
@@ -41,7 +41,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };

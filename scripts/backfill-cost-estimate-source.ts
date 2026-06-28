@@ -55,11 +55,9 @@ async function run() {
   await dbConnect();
 
   const query = {
-    $or: [
-      { boqSource: { $exists: false } },
-      { boqSource: null },
-      { boqSource: '' },
-    ],
+    $expr: {
+      $eq: [{ $ifNull: ['$boqSource', ''] }, ''],
+    },
   };
 
   const estimates = await CostEstimate.find(query).select(

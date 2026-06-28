@@ -11,7 +11,7 @@ const ElementInstanceSchema = z.object({
     gridRef: z.array(z.string()).optional(),
     levelId: z.string(),
     endLevelId: z.string().optional(),
-    customGeometry: z.record(z.number()).optional(),
+    customGeometry: z.record(z.string(), z.number()).optional(),
   }),
   tags: z.array(z.string()).optional(),
 });
@@ -86,7 +86,7 @@ export async function PUT(
         {
           success: false,
           error: 'Validation failed',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );

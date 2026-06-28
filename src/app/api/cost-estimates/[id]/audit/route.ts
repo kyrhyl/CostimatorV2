@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import dbConnect from '@/lib/db/connect';
 import CostEstimate from '@/models/CostEstimate';
 import EstimateAudit from '@/models/EstimateAudit';
+import type { AuditRecommendation } from '@/models/EstimateAudit';
 import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
 import { AUDIT_READ_ROLES, AUDIT_WRITE_ROLES } from '@/lib/auth/roles';
 
@@ -87,15 +88,16 @@ export async function PUT(
     const body = await request.json().catch(() => ({}));
     const status = body?.status === 'submitted' ? 'submitted' : 'draft';
     const recommendationRaw = String(body?.recommendation || '').trim();
-    const recommendation = recommendationRaw || undefined;
-    const allowedRecommendations = new Set(['pass', 'fail', 'needs_revision']);
+    const allowedRecommendations = new Set<AuditRecommendation>(['pass', 'fail', 'needs_revision']);
 
-    if (recommendation && !allowedRecommendations.has(recommendation)) {
+    if (recommendationRaw && !allowedRecommendations.has(recommendationRaw as AuditRecommendation)) {
       return NextResponse.json(
         { success: false, error: 'Invalid recommendation value.' },
         { status: 400 },
       );
     }
+
+    const recommendation = recommendationRaw ? (recommendationRaw as AuditRecommendation) : undefined;
 
     if (status === 'submitted' && !recommendation) {
       return NextResponse.json(

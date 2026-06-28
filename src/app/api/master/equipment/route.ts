@@ -23,6 +23,8 @@ const EquipmentSchema = z.object({
   flywheelHorsepower: z.number().min(0).optional(),
   fuelConsumptionAvgLph: z.number().min(0).optional(),
   lubeConsumptionAvgLph: z.number().min(0).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  rentalRate: z.number().min(0).optional(),
 });
 
 const BulkEquipmentSchema = z.array(EquipmentSchema).min(1, 'At least one equipment required');
@@ -38,7 +40,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };
@@ -55,8 +57,6 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
  * 
  * Query Parameters:
  * - search: Search in description or completeDescription (partial match)
- * - minRate: Minimum hourly rate
- * - maxRate: Maximum hourly rate
  * - sortBy: Field to sort by (default: no)
  * - order: Sort order 'asc' or 'desc' (default: asc)
  */
@@ -67,8 +67,6 @@ export async function GET(request: NextRequest) {
     // Parse query parameters
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
-    const minRate = searchParams.get('minRate');
-    const maxRate = searchParams.get('maxRate');
     const sortBy = searchParams.get('sortBy') || 'no';
     const order = searchParams.get('order') === 'desc' ? -1 : 1;
     const edition = (searchParams.get('edition') || '').trim().toUpperCase();
@@ -139,8 +137,6 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      const missingRateIds = ids.filter((id: any) => !rateMap.has(String(id)));
-
       // In rate views, return only rows covered by selected edition/mode.
       // This avoids blocking the whole view when master equipment has extra rows.
       equipment = (equipment as any[]).filter((eq) => rateMap.has(String(eq._id)));
@@ -168,15 +164,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (minRate || maxRate) {
-      const min = minRate ? parseFloat(minRate) : Number.NEGATIVE_INFINITY;
-      const max = maxRate ? parseFloat(maxRate) : Number.POSITIVE_INFINITY;
-      equipment = (equipment as any[]).filter((eq) => {
-        const hr = Number(eq.hourlyRate || 0);
-        return hr >= min && hr <= max;
-      });
-    }
-    
+
     return NextResponse.json({
       success: true,
       count: equipment.length,

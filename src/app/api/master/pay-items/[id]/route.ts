@@ -81,7 +81,7 @@ export async function PATCH(
       return NextResponse.json(
         { 
           success: false, 
-          error: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+          error: validation.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         },
         { status: 400 }
       );

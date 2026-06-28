@@ -29,7 +29,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };
@@ -94,10 +94,11 @@ function parseEquipmentCsv(csvData: string): { success: boolean; data?: any[]; e
       'hp': 'flywheelHorsepower',
       'horsepower': 'flywheelHorsepower',
       'rental rate': 'rentalRate',
-      'rentalrate': 'rentalRate',
       'hourly rate': 'hourlyRate',
-      'hourlyrate': 'hourlyRate',
-      'rate': 'hourlyRate',
+      'fuelconsumptionavglph': 'fuelConsumptionAvgLph',
+      'fuel consumption avg lph': 'fuelConsumptionAvgLph',
+      'lubeconsumptionavglph': 'lubeConsumptionAvgLph',
+      'lube consumption avg lph': 'lubeConsumptionAvgLph',
     };
     
     // Process each data line
@@ -115,7 +116,7 @@ function parseEquipmentCsv(csvData: string): { success: boolean; data?: any[]; e
           const value = values[j].trim();
           
           // Parse numeric fields
-          if (['no', 'flywheelHorsepower', 'rentalRate', 'hourlyRate'].includes(mappedField)) {
+          if (['no', 'flywheelHorsepower', 'fuelConsumptionAvgLph', 'lubeConsumptionAvgLph', 'rentalRate', 'hourlyRate'].includes(mappedField)) {
             const num = parseFloat(value);
             if (!isNaN(num)) {
               equipment[mappedField] = mappedField === 'no' ? Math.floor(num) : num;
@@ -147,8 +148,8 @@ function parseEquipmentCsv(csvData: string): { success: boolean; data?: any[]; e
         equipment.description = equipment.completeDescription;
       }
       
-      equipment.rentalRate = equipment.rentalRate || 0;
-      equipment.hourlyRate = equipment.hourlyRate || 0;
+      equipment.fuelConsumptionAvgLph = equipment.fuelConsumptionAvgLph || 0;
+      equipment.lubeConsumptionAvgLph = equipment.lubeConsumptionAvgLph || 0;
       
       equipmentData.push(equipment);
     }
@@ -181,7 +182,7 @@ function parseEquipmentCsv(csvData: string): { success: boolean; data?: any[]; e
  * - skipDuplicates: Whether to skip duplicate equipment numbers (default: false)
  * 
  * CSV Format:
- * No,Complete Description,Description,Equipment Model,Capacity,Flywheel Horsepower,Rental Rate,Hourly Rate
+ * No,Complete Description,Description,Equipment Model,Capacity,Flywheel Horsepower,FuelConsumptionAvgLph,LubeConsumptionAvgLph
  */
 export async function POST(request: NextRequest) {
   try {

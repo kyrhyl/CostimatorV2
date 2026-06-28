@@ -6,12 +6,15 @@ import { hashPassword } from '@/lib/auth/password';
 import { getSessionUser } from '@/lib/auth/session';
 import { MASTER_ADMIN_ROLES } from '@/lib/auth/roles';
 import { buildAuditActor, logAuditEvent } from '@/lib/audit/logger';
+import type { IUser, UserRole } from '@/models/User';
+
+const USER_ROLE_VALUES = ['master_admin', 'admin', 'project_creator', 'auditor', 'viewer'] as const satisfies readonly UserRole[];
 
 const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(8),
-  roles: z.array(z.string()).min(1),
+  roles: z.array(z.enum(USER_ROLE_VALUES)).min(1),
   status: z.enum(['active', 'disabled']).optional(),
 });
 
@@ -57,6 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
+  const createdBy = auth.user?.id ? new User.db.base.Types.ObjectId(auth.user.id) : undefined;
 
   const user = await User.create({
     email: parsed.data.email.toLowerCase(),
@@ -64,8 +68,8 @@ export async function POST(request: NextRequest) {
     passwordHash,
     roles: parsed.data.roles,
     status: parsed.data.status || 'active',
-    createdBy: auth.user?.id,
-  });
+    createdBy,
+  } satisfies Pick<IUser, 'email' | 'name' | 'passwordHash' | 'roles' | 'status' | 'createdBy'>);
 
   await logAuditEvent({
     actor: buildAuditActor(auth.user),

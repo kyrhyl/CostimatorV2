@@ -14,10 +14,10 @@ import { z } from 'zod';
 
 const MaterialSchema = z.object({
   materialCode: z.string().trim().min(1, 'Material code is required').transform((v) => v.toUpperCase()),
-  works: z.string().trim().min(1, 'Works is required').transform((v) => v.toUpperCase()),
+  works: z.string().trim().optional().default('').transform((v) => v.toUpperCase()),
   materialDescription: z.string().trim().min(1, 'Material description is required').transform((v) => v.replace(/\s+/g, ' ')),
   unit: z.string().trim().min(1, 'Unit is required').transform((v) => v.toUpperCase()),
-  category: z.string().trim().min(1, 'Category is required').transform((v) => v.toUpperCase()),
+  category: z.string().trim().optional().default('').transform((v) => v.toUpperCase()),
   includeHauling: z.boolean().optional().default(true),
   isActive: z.boolean().optional().default(true),
 });
@@ -35,7 +35,7 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+        error: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       };
     }
     return { success: false, error: 'Validation failed' };

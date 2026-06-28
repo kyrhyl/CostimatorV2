@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       if (parsed.success) {
         valid.push(parsed.data);
       } else {
-        errors.push(`Row ${normalized._rowIndex}: ${parsed.error.errors.map((e) => e.message).join(', ')}`);
+        errors.push(`Row ${normalized._rowIndex}: ${parsed.error.issues.map((e) => e.message).join(', ')}`);
       }
     }
 

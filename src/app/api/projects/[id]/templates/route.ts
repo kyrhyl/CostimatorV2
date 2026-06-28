@@ -8,7 +8,7 @@ const ElementTemplateSchema = z.object({
   id: z.string(),
   type: z.enum(['beam', 'slab', 'column', 'foundation']),
   name: z.string().min(1, 'Template name is required'),
-  properties: z.record(z.number()),
+  properties: z.record(z.string(), z.number()),
   dpwhItemNumber: z.string().optional(),
   rebarConfig: z.object({
     mainBars: z.object({
@@ -142,7 +142,7 @@ export async function PUT(
         {
           success: false,
           error: 'Validation failed',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );
