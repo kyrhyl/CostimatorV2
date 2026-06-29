@@ -10,7 +10,7 @@ export async function GET() {
       .filter(Boolean)
       .sort((a, b) => b.localeCompare(a));
 
-    return NextResponse.json({ success: true, data: sorted });
+    return NextResponse.json({ success: true, data: sorted, editions: sorted });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to load ACEL editions' },

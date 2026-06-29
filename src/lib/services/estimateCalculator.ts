@@ -7,6 +7,7 @@ import DUPATemplate from '@/models/DUPATemplate';
 import Material from '@/models/Material';
 import MaterialPrice from '@/models/MaterialPrice';
 import Equipment, { IEquipment } from '@/models/Equipment';
+import EquipmentRate from '@/models/EquipmentRate';
 import LaborRate, { ILaborRate } from '@/models/LaborRate';
 import { computeHaulingCost, HaulingTemplate } from '@/lib/calc/hauling';
 import { getDPWHMarkupRates } from '@/lib/utils/dpwhMarkups';
@@ -20,6 +21,7 @@ interface CalculateEstimateOptions {
   district: string;
   laborVersion?: string;
   cmpdVersion?: string;  // When provided, will lookup MaterialPrice for CMPD or canvass prices
+  equipmentRateEdition?: string;
   ocmPercentage?: number;  // Optional - will auto-calculate from project cost if not provided
   cpPercentage?: number;   // Optional - will auto-calculate from project cost if not provided
   vatPercentage?: number;  // Optional - defaults to 12%
@@ -139,12 +141,28 @@ export async function calculateEstimate(
   }
 
   const equipmentMap = new Map<string, IEquipment>();
+  const equipmentRateMap = new Map<string, number>();
   if (equipmentIds.size > 0) {
     const equipmentDocs = await Equipment.find({
       _id: { $in: Array.from(equipmentIds) }
     }).lean() as unknown as IEquipment[];
     for (const equipment of equipmentDocs) {
       equipmentMap.set((equipment._id as mongoose.Types.ObjectId).toString(), equipment);
+    }
+
+    if (options.equipmentRateEdition) {
+      const equipmentRates = await EquipmentRate.find({
+        equipmentId: { $in: Array.from(equipmentIds) },
+        edition: options.equipmentRateEdition.trim().toUpperCase(),
+        mode: 'fixed',
+        isActive: true,
+      })
+        .select('equipmentId ratePerHour')
+        .lean();
+
+      for (const rate of equipmentRates) {
+        equipmentRateMap.set(String(rate.equipmentId), Number(rate.ratePerHour || 0));
+      }
     }
   }
 
@@ -159,20 +177,19 @@ export async function calculateEstimate(
   }
 
   const materialPriceMap = new Map<string, { cmpd?: any; canvass?: any }>();
-  if (options.cmpdVersion && options.location && materialCodes.size > 0) {
+  if (options.cmpdVersion && materialCodes.size > 0) {
     const materialPrices = await MaterialPrice.find({
       materialCode: { $in: Array.from(materialCodes) },
       cmpd_version: options.cmpdVersion,
-      location: options.location,
       isActive: true
     }).sort({ effectiveDate: -1 }).lean();
 
     for (const price of materialPrices) {
-      const key = `${price.materialCode}|${price.location}|${price.cmpd_version}`;
+      const key = `${price.materialCode}|${price.cmpd_version}`;
       const source = price.priceSource || 'cmpd';
       const existing = materialPriceMap.get(key) || {};
       if (source === 'canvass') {
-        if (!existing.canvass) {
+        if (!existing.canvass || price.location === options.location) {
           existing.canvass = price;
         }
       } else {
@@ -230,6 +247,7 @@ export async function calculateEstimate(
       options.location,     // Pass location for CMPD lookup
       {
         equipmentMap,
+        equipmentRateMap,
         materialMap,
         materialPriceMap
       }
@@ -351,11 +369,13 @@ async function computeLineItemDirectCosts(
   location?: string,
   lookup?: {
     equipmentMap: Map<string, any>;
+    equipmentRateMap: Map<string, number>;
     materialMap: Map<string, any>;
-    materialPriceMap: Map<string, { cmpd?: any; canvass?: any }>;
+      materialPriceMap: Map<string, { cmpd?: any; canvass?: any }>;
   }
 ) {
   const equipmentMap = lookup?.equipmentMap ?? new Map<string, any>();
+  const equipmentRateMap = lookup?.equipmentRateMap ?? new Map<string, number>();
   const materialMap = lookup?.materialMap ?? new Map<string, any>();
   const materialPriceMap = lookup?.materialPriceMap ?? new Map<string, any>();
 
@@ -382,8 +402,14 @@ async function computeLineItemDirectCosts(
   for (const equip of dupaTemplate.equipmentTemplate || []) {
     let hourlyRate = 0;
     if (equip.equipmentId) {
-      const equipment = equipmentMap.get(equip.equipmentId.toString());
-      hourlyRate = equipment?.hourlyRate || 0;
+      const equipmentId = equip.equipmentId.toString();
+      const editionRate = equipmentRateMap.get(equipmentId);
+      if (typeof editionRate === 'number' && editionRate > 0) {
+        hourlyRate = editionRate;
+      } else {
+        const equipment = equipmentMap.get(equipmentId);
+        hourlyRate = equipment?.hourlyRate || 0;
+      }
     }
     const amount = equip.noOfUnits * equip.noOfHours * hourlyRate;
     equipmentCost += amount;
@@ -418,8 +444,8 @@ async function computeLineItemDirectCosts(
     const materialCode = mat.materialCode ? mat.materialCode.toString() : '';
     
     // Try CMPD price lookup first if version is provided
-    if (cmpdVersion && location && materialCode) {
-      const key = `${materialCode}|${location}|${cmpdVersion}`;
+    if (cmpdVersion && materialCode) {
+      const key = `${materialCode}|${cmpdVersion}`;
       const priceEntry = materialPriceMap.get(key);
       const cmpdPrice = priceEntry?.cmpd;
       const canvassPrice = priceEntry?.canvass;

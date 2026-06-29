@@ -19,6 +19,12 @@ interface LaborVersionOption {
   status: string;
 }
 
+interface AcelEditionResponse {
+  success: boolean;
+  data?: string[];
+  editions?: string[];
+}
+
 export default function CreateEstimateModal({
   projectId,
   onClose,
@@ -34,6 +40,8 @@ export default function CreateEstimateModal({
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [cmpdVersions, setCmpdVersions] = useState<string[]>([]);
   const [loadingCmpdVersions, setLoadingCmpdVersions] = useState(true);
+  const [acelEditions, setAcelEditions] = useState<string[]>([]);
+  const [loadingAcelEditions, setLoadingAcelEditions] = useState(true);
   const [laborVersions, setLaborVersions] = useState<LaborVersionOption[]>([]);
   const [loadingLaborVersions, setLoadingLaborVersions] = useState(true);
   const [pendingEstimateId, setPendingEstimateId] = useState<string | null>(null);
@@ -43,6 +51,7 @@ export default function CreateEstimateModal({
     location: '',
     district: '',
     cmpdVersion: '',
+    equipmentRateEdition: '',
     laborVersion: '',
     vatPercentage: 12,
   });
@@ -50,6 +59,7 @@ export default function CreateEstimateModal({
   useEffect(() => {
     loadLocations();
     loadCmpdVersions();
+    loadAcelEditions();
     loadLaborVersions();
   }, []);
 
@@ -74,9 +84,21 @@ export default function CreateEstimateModal({
     try {
       const response = await fetch('/api/master/materials/prices/versions');
       const data = await response.json();
-      
-      if (data.success && data.versions) {
-        setCmpdVersions(data.versions);
+
+      const versions = Array.isArray(data.versions)
+        ? data.versions
+        : Array.isArray(data.data)
+          ? data.data
+          : [];
+
+      if (data.success) {
+        setCmpdVersions(versions);
+        if (versions.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            cmpdVersion: prev.cmpdVersion || versions[0],
+          }));
+        }
       }
     } catch (err) {
       console.error('Failed to load CMPD versions:', err);
@@ -105,6 +127,32 @@ export default function CreateEstimateModal({
     }
   };
 
+  const loadAcelEditions = async () => {
+    try {
+      const response = await fetch('/api/master/equipment/rates/editions');
+      const data: AcelEditionResponse = await response.json();
+      const editions = Array.isArray(data.editions)
+        ? data.editions
+        : Array.isArray(data.data)
+          ? data.data
+          : [];
+
+      if (data.success) {
+        setAcelEditions(editions);
+        if (editions.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            equipmentRateEdition: prev.equipmentRateEdition || editions[0],
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load ACEL editions:', err);
+    } finally {
+      setLoadingAcelEditions(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -119,6 +167,7 @@ export default function CreateEstimateModal({
         location: formData.location,
         district: formData.district,
         cmpdVersion: formData.cmpdVersion,
+        equipmentRateEdition: formData.equipmentRateEdition,
         laborVersion: formData.laborVersion,
         vatPercentage: formData.vatPercentage,
         boqSource: 'manual',
@@ -304,6 +353,32 @@ export default function CreateEstimateModal({
                 {cmpdVersions.map((version) => (
                   <option key={version} value={version}>
                     {version}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">ACEL Edition (Equipment Rates)</label>
+            {loadingAcelEditions ? (
+              <div className="w-full border rounded px-3 py-2 text-gray-400">
+                Loading ACEL editions...
+              </div>
+            ) : acelEditions.length === 0 ? (
+              <div className="text-sm text-yellow-600 p-2 bg-yellow-50 rounded">
+                No ACEL editions found. Equipment pricing will fall back to the master equipment hourly rates.
+              </div>
+            ) : (
+              <select
+                value={formData.equipmentRateEdition}
+                onChange={(e) => setFormData({ ...formData, equipmentRateEdition: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">Use master equipment rates</option>
+                {acelEditions.map((edition) => (
+                  <option key={edition} value={edition}>
+                    {edition}
                   </option>
                 ))}
               </select>

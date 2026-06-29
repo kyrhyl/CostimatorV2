@@ -102,10 +102,10 @@ export default function EditProjectPage() {
     }
   }, []);
 
-  const fetchCmpdVersions = useCallback(async (districtValue: string) => {
+  const fetchCmpdVersions = useCallback(async () => {
     setLoadingVersions(true);
     try {
-      const response = await fetch(`/api/master/materials/prices/versions?district=${encodeURIComponent(districtValue)}`);
+      const response = await fetch('/api/master/materials/prices/versions');
       const result = await response.json();
       if (result.success) {
         setCmpdVersions(result.versions || []);
@@ -174,9 +174,7 @@ export default function EditProjectPage() {
         setEstimatedComponentCost(formatCurrencyInput(project.estimatedComponentCost?.toString() || ''));
 
         // Fetch CMPD versions for the project's district
-        if (project.district) {
-          fetchCmpdVersions(project.district);
-        }
+        fetchCmpdVersions();
       } else {
         setError(result.error || 'Failed to load project');
       }
@@ -197,7 +195,7 @@ export default function EditProjectPage() {
   // Reload CMPD versions when district changes manually
   useEffect(() => {
     if (district && !loading) {
-      fetchCmpdVersions(district);
+      fetchCmpdVersions();
     }
   }, [district, loading, fetchCmpdVersions]);
 
@@ -437,7 +435,7 @@ export default function EditProjectPage() {
                       placeholder="e.g., CMPD-2024-Q1"
                     />
                     <p className="text-xs text-orange-500 mt-1">
-                      No CMPD versions found for this district. You can enter manually or leave blank to use latest prices.
+                      No CMPD versions found yet. You can enter one manually or leave it blank until prices are imported.
                     </p>
                   </div>
                 ) : (

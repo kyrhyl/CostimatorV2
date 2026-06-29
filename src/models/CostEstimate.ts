@@ -138,6 +138,7 @@ export interface ICostEstimate extends Document {
   location: string;                  // For labor rates
   district: string;
   cmpdVersion: string;               // e.g., "CMPD-2024-Q1"
+  equipmentRateEdition?: string;     // e.g., "ACEL-27TH-2026W18"
   laborVersion?: string;             // e.g., "LR-2026-Q2"
   effectiveDate: Date;               // Price snapshot date
   
@@ -345,6 +346,13 @@ const CostEstimateSchema = new Schema<ICostEstimate>(
       required: true,
       trim: true,
       index: true
+    },
+    equipmentRateEdition: {
+      type: String,
+      default: '',
+      trim: true,
+      uppercase: true,
+      index: true,
     },
     laborVersion: {
       type: String,

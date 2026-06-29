@@ -73,7 +73,7 @@ export async function POST(
     if (!resolvedDistrict) {
       console.error('[Cost Estimate] Missing district');
       return NextResponse.json(
-        { error: 'district is required for CMPD pricing' },
+        { error: 'district is required for labor-rate and project pricing context' },
         { status: 400 }
       );
     }
@@ -88,6 +88,7 @@ export async function POST(
     }
 
     const resolvedLaborVersion = body.laborVersion || project.manualPowConfig?.laborVersion || project.laborVersion || '';
+    const resolvedEquipmentRateEdition = body.equipmentRateEdition || project.manualPowConfig?.equipmentRateEdition || '';
 
     if (body.boqSource === 'manual') {
       console.log('[Cost Estimate] Configuring manual Program of Works');
@@ -99,6 +100,7 @@ export async function POST(
       project.manualPowConfig = {
         laborLocation: body.location,
         cmpdVersion: resolvedCmpdVersion,
+        equipmentRateEdition: resolvedEquipmentRateEdition,
         laborVersion: resolvedLaborVersion,
         district: resolvedDistrict,
         vatPercentage: body.vatPercentage ?? 12,
@@ -214,6 +216,7 @@ export async function POST(
       location: body.location,
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpdVersion,
+      equipmentRateEdition: resolvedEquipmentRateEdition,
     });
     
     const calculationResult = await calculateEstimate(
@@ -224,6 +227,7 @@ export async function POST(
         district: resolvedDistrict,
         laborVersion: resolvedLaborVersion,
         cmpdVersion: resolvedCmpdVersion,
+        equipmentRateEdition: resolvedEquipmentRateEdition,
         ocmPercentage: body.ocmPercentage ?? 12,
         cpPercentage: body.cpPercentage ?? 10,
         vatPercentage: body.vatPercentage ?? 12,
@@ -252,6 +256,7 @@ export async function POST(
       location: body.location,
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpdVersion,
+      equipmentRateEdition: resolvedEquipmentRateEdition,
       laborVersion: resolvedLaborVersion,
       effectiveDate: body.effectiveDate || new Date(),
       

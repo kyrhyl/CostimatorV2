@@ -94,6 +94,7 @@ export interface IProject extends Document {
   manualPowConfig?: {
     laborLocation?: string;
     cmpdVersion?: string;
+    equipmentRateEdition?: string;
     laborVersion?: string;
     district?: string;
     vatPercentage?: number;

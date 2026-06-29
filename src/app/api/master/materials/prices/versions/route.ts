@@ -2,15 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import MaterialPrice from '@/models/MaterialPrice';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await dbConnect();
-    const versions = await MaterialPrice.distinct('cmpd_version', {
+    const { searchParams } = new URL(request.url);
+    const district = String(searchParams.get('district') || '').trim();
+
+    const query: Record<string, unknown> = {
       cmpd_version: { $exists: true, $ne: '' },
-    });
+    };
+
+    if (district) {
+      query.district = district;
+    }
+
+    const versions = await MaterialPrice.distinct('cmpd_version', query);
+    const sortedVersions = versions.sort((a, b) => String(b).localeCompare(String(a)));
+
     return NextResponse.json({
       success: true,
-      data: versions.sort((a, b) => String(b).localeCompare(String(a))),
+      data: sortedVersions,
+      versions: sortedVersions,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || 'Failed to load CMPD versions' }, { status: 500 });

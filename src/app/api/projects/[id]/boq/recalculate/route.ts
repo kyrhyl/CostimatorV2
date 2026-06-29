@@ -105,20 +105,19 @@ export async function POST(
     const materialMap = new Map<string, any>(materialDocs.map((item: any) => [item.materialCode, item]));
 
     const materialPriceMap = new Map<string, { cmpd?: any; canvass?: any }>();
-    if (project.cmpdVersion && project.projectLocation && materialCodes.size > 0) {
+    if (project.cmpdVersion && materialCodes.size > 0) {
       const materialPrices = await MaterialPrice.find({
         materialCode: { $in: Array.from(materialCodes) },
         cmpd_version: project.cmpdVersion,
-        location: project.projectLocation,
         isActive: true,
       }).sort({ effectiveDate: -1 }).lean();
 
       for (const price of materialPrices) {
-        const key = `${price.materialCode}|${price.location}|${price.cmpd_version}`;
+        const key = `${price.materialCode}|${price.cmpd_version}`;
         const source = price.priceSource || 'cmpd';
         const existing = materialPriceMap.get(key) || {};
         if (source === 'canvass') {
-          if (!existing.canvass) existing.canvass = price;
+          if (!existing.canvass || price.location === project.projectLocation) existing.canvass = price;
         } else {
           if (!existing.cmpd) existing.cmpd = price;
         }
@@ -193,8 +192,8 @@ export async function POST(
         let requiresCanvass = false;
         const materialCode = mat.materialCode ? mat.materialCode.toString() : '';
 
-        if (project.cmpdVersion && project.projectLocation && materialCode) {
-          const key = `${materialCode}|${project.projectLocation}|${project.cmpdVersion}`;
+        if (project.cmpdVersion && materialCode) {
+          const key = `${materialCode}|${project.cmpdVersion}`;
           const priceEntry = materialPriceMap.get(key);
           const cmpdPrice = priceEntry?.cmpd;
           const canvassPrice = priceEntry?.canvass;

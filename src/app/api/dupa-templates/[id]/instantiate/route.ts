@@ -32,10 +32,11 @@ const InstantiateRequestSchema = z.object({
 });
 
 /**
- * Get material price with district-based priority
+ * Get material price with CMPD-version-first priority.
  * Priority:
- * 1. District-specific active price (with optional CMPD version match)
- * 2. Material base price
+ * 1. CMPD-version price by material code, regardless of location
+ * 2. CMPD-version price by description, regardless of location
+ * 3. Location/district fallback lookups for legacy/local canvass rows
  */
 async function getMaterialPrice(
   materialCode: string,
@@ -50,7 +51,44 @@ async function getMaterialPrice(
   const normalizedDescription = String(materialDescription || '').trim();
   const normalizedDescriptionLoose = normalizedDescription.replace(/\s+/g, ' ').trim();
 
-  // Priority 0: Try location-specific price (same strategy as POW costing)
+  if (cmpdVersion) {
+    const versionCodeQuery: any = {
+      materialCode: codeRegex || normalizedCode,
+      cmpd_version: cmpdVersion,
+      isActive: true,
+      effectiveDate: effectiveDate ? { $lte: effectiveDate } : { $exists: true },
+    };
+
+    const versionCodePrice: any = await MaterialPrice.findOne(versionCodeQuery)
+      .sort({ priceSource: 1, effectiveDate: -1 })
+      .lean();
+
+    if (versionCodePrice) {
+      console.log(`Using CMPD-version price for ${materialCode} (${cmpdVersion}): P${versionCodePrice.unitCost}`);
+      return versionCodePrice.unitCost;
+    }
+
+    if (normalizedDescription) {
+      const strictDescRegex = new RegExp(`^${normalizedDescription.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      const looseDescRegex = new RegExp(normalizedDescriptionLoose.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+      const versionDescPrice: any = await MaterialPrice.findOne({
+        description: { $in: [strictDescRegex, looseDescRegex] },
+        cmpd_version: cmpdVersion,
+        isActive: true,
+        effectiveDate: effectiveDate ? { $lte: effectiveDate } : { $exists: true },
+      })
+        .sort({ priceSource: 1, effectiveDate: -1 })
+        .lean();
+
+      if (versionDescPrice) {
+        console.log(`Using CMPD-version description price for ${normalizedDescription} (${cmpdVersion}): P${versionDescPrice.unitCost}`);
+        return versionDescPrice.unitCost;
+      }
+    }
+  }
+
+  // Legacy fallback: location-specific price
   if (location) {
     const locationQuery: any = {
       materialCode: codeRegex || normalizedCode,
@@ -72,7 +110,7 @@ async function getMaterialPrice(
 
   }
 
-  // Priority 1: Try district-specific price
+  // Legacy fallback: district-specific price
   if (district) {
     const query: any = {
       materialCode: codeRegex || normalizedCode,
@@ -440,6 +478,7 @@ export async function POST(
         .map(async (material: any) => {
           let basePrice = 0;
           let materialDoc: any = null;
+          let requiresCanvass = false;
 
           if (material.materialCode) {
             // Fetch the material to check if hauling should be included
@@ -458,6 +497,7 @@ export async function POST(
               material.description,
             );
             if (resolvedPrice === null) {
+              requiresCanvass = true;
               missingMaterials.push({
                 materialCode: String(material.materialCode || '').trim(),
                 description: String(material.description || '').trim(),
@@ -495,28 +535,13 @@ export async function POST(
             haulingIncluded: haulingWasAdded,
             basePrice: basePrice,
             haulingCost: haulingCostApplied,
+            requiresCanvass,
           };
           
           console.log(`Material entry created:`, JSON.stringify(result, null, 2));
           return result;
         })
     );
-
-    if (missingMaterials.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing material prices for selected CMPD version. Please update CMPD/canvass prices first.',
-          details: {
-            cmpdVersion: projectCmpdVersion,
-            district: projectDistrict || '',
-            location,
-            missingMaterials,
-          },
-        },
-        { status: 422 }
-      );
-    }
 
     // Calculate costs
     const laborCostTotal = laborEntries.reduce((sum, item) => sum + item.amount, 0);
@@ -576,12 +601,17 @@ export async function POST(
       // Metadata
       location,
       instantiatedAt: new Date().toISOString(),
+      missingMaterialPrices: missingMaterials,
     };
 
     return NextResponse.json(
       {
         success: true,
         data: computedData,
+        warning:
+          missingMaterials.length > 0
+            ? 'Some materials have no CMPD/canvass prices and were set to zero. Update prices before final approval.'
+            : undefined,
         message: `Template instantiated successfully for location: ${location}`,
       },
       { status: 200 }
