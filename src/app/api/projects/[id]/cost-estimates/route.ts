@@ -8,8 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import CostEstimate from '@/models/CostEstimate';
-import TakeoffVersion from '@/models/TakeoffVersion';
-import CalcRun from '@/models/CalcRun';
 import BOQ from '@/models/BOQ';  // NEW: Simple BOQ database
 import ProjectBOQ from '@/models/ProjectBOQ';  // LEGACY: Keep for backward compatibility
 import Project from '@/models/Project';
@@ -66,7 +64,7 @@ export async function POST(
     if (!body.boqSource) {
       console.error('[Cost Estimate] Missing boqSource');
       return NextResponse.json(
-        { error: 'boqSource is required (boqDatabase, projectBOQ, takeoffVersion, calcRun, or manual)' },
+        { error: 'boqSource is required (boqDatabase, projectBOQ, or manual)' },
         { status: 400 }
       );
     }
@@ -185,64 +183,9 @@ export async function POST(
       }));
       console.log(`Using ProjectBOQ (${boqLines.length} items)`);
     }
-    else if (body.boqSource === 'takeoffVersion') {
-      // Option 2: Use TakeoffVersion (snapshot-based, for version control)
-      if (!body.takeoffVersionId) {
-        return NextResponse.json(
-          { error: 'takeoffVersionId is required when boqSource is "takeoffVersion"' },
-          { status: 400 }
-        );
-      }
-      
-      const takeoffVersion = await TakeoffVersion.findOne({
-        _id: body.takeoffVersionId,
-        projectId
-      });
-      
-      if (!takeoffVersion) {
-        return NextResponse.json(
-          { error: 'Takeoff version not found or does not belong to this project' },
-          { status: 404 }
-        );
-      }
-      
-      if (!takeoffVersion.boqLines || takeoffVersion.boqLines.length === 0) {
-        return NextResponse.json(
-          { error: 'Takeoff version has no BOQ lines. Please run calculations first.' },
-          { status: 400 }
-        );
-      }
-      
-      boqLines = takeoffVersion.boqLines;
-      takeoffVersionId = takeoffVersion._id as mongoose.Types.ObjectId;
-      console.log(`Using TakeoffVersion (${boqLines.length} items)`);
-    }
-    else if (body.boqSource === 'calcRun') {
-      // Option 3: Use latest CalcRun (fallback for legacy projects)
-      const latestCalcRun = await CalcRun.findOne({ projectId })
-        .sort({ timestamp: -1 })
-        .lean();
-      
-      if (!latestCalcRun) {
-        return NextResponse.json(
-          { error: 'No calculation runs found for this project. Please run takeoff calculations first.' },
-          { status: 404 }
-        );
-      }
-      
-      if (!latestCalcRun.boqLines || latestCalcRun.boqLines.length === 0) {
-        return NextResponse.json(
-          { error: 'Latest calculation run has no BOQ lines. Please run calculations first.' },
-          { status: 400 }
-        );
-      }
-      
-      boqLines = latestCalcRun.boqLines;
-      console.log(`Using CalcRun (${boqLines.length} items)`);
-    }
     else {
       return NextResponse.json(
-        { error: 'Invalid boqSource. Must be "projectBOQ", "takeoffVersion", "calcRun", or "boqDatabase"' },
+        { error: 'Invalid boqSource. Must be "projectBOQ", "boqDatabase", or "manual"' },
         { status: 400 }
       );
     }
@@ -251,7 +194,7 @@ export async function POST(
     if (!boqLines || boqLines.length === 0) {
       console.error('[Cost Estimate] No BOQ lines found');
       return NextResponse.json(
-        { error: 'No BOQ data found. Please add BOQ items or run takeoff calculations first.' },
+        { error: 'No BOQ data found. Please add BOQ items first.' },
         { status: 400 }
       );
     }
@@ -263,10 +206,7 @@ export async function POST(
     const estimateNumber = await CostEstimate.generateEstimateNumber();
     console.log('[Cost Estimate] Generated estimate number:', estimateNumber);
     
-    const boqSourceRef =
-      body.boqSource === 'takeoffVersion' && body.takeoffVersionId
-        ? new mongoose.Types.ObjectId(body.takeoffVersionId)
-        : null;
+    const boqSourceRef = null;
 
     // Calculate estimate lines from BOQ
     console.log('[Cost Estimate] Starting calculation...');
@@ -279,7 +219,7 @@ export async function POST(
     const calculationResult = await calculateEstimate(
       boqLines,
       {
-        takeoffVersionId: takeoffVersionId?.toString() || projectId,
+        takeoffVersionId: projectId,
         location: body.location,
         district: resolvedDistrict,
         laborVersion: resolvedLaborVersion,

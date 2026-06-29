@@ -56,7 +56,7 @@ export default function NewProjectPage() {
   const [appropriation, setAppropriation] = useState('');
   const [contractId, setContractId] = useState('');
   const [projectType, setProjectType] = useState('Road Construction');
-  const [powMode, setPowMode] = useState<'takeoff' | 'manual'>('takeoff');
+  const [powMode] = useState<'takeoff' | 'manual'>('manual');
   const [status, setStatus] = useState('Planning');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -376,16 +376,11 @@ export default function NewProjectPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Program of Works Mode
               </label>
-              <select
-                value={powMode}
-                onChange={(e) => setPowMode(e.target.value as 'takeoff' | 'manual')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              >
-                <option value="takeoff">Takeoff Linked</option>
-                <option value="manual">Manual BOQ Input</option>
-              </select>
+              <div className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700">
+                Manual BOQ Input
+              </div>
               <p className="text-xs text-gray-500 mt-1">
-                Choose "Manual BOQ Input" for projects where Program of Works entries are encoded directly from DUPA templates.
+                Quantity take-off is no longer part of the project setup flow. Program of Works entries are encoded directly from DUPA templates.
               </p>
             </div>
 

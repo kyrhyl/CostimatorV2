@@ -1208,7 +1208,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
               </p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
                 <span className={`px-2 py-0.5 rounded-full font-semibold ${isManualWorkspace ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {isManualWorkspace ? 'Manual Workspace' : 'Takeoff Workspace'}
+                  {isManualWorkspace ? 'Manual Workspace' : 'Legacy BOQ Workspace'}
                 </span>
                 {!canModifyPow && (
                   <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold">
@@ -1294,7 +1294,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                   No Program of Works Yet
                 </h3>
                 <p className="text-gray-700 mb-6">
-                  Create your first cost estimate from a takeoff version to generate the Program of Works.
+                  Create your first cost estimate to generate the Program of Works.
                 </p>
                 {canModifyPow ? (
                   <button
@@ -1596,7 +1596,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
             if (result?.manualMode) {
               router.push(`/projects/${projectId}/program-of-works?section=manual-boq`);
             } else if (result?.estimateId) {
-              router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&view=takeoff&section=overview`);
+              router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&section=overview`);
             }
           }}
         />

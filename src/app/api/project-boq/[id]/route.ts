@@ -86,7 +86,7 @@ export async function PATCH(
 
     if (project.powMode !== 'manual') {
       return NextResponse.json(
-        { success: false, error: 'Manual BOQ is read-only while Takeoff Linked mode is active' },
+        { success: false, error: 'Manual BOQ is only available for projects in manual POW mode' },
         { status: 403 }
       );
     }
@@ -197,7 +197,7 @@ export async function DELETE(
 
     if (project.powMode !== 'manual') {
       return NextResponse.json(
-        { success: false, error: 'Manual BOQ is read-only while Takeoff Linked mode is active' },
+        { success: false, error: 'Manual BOQ is only available for projects in manual POW mode' },
         { status: 403 }
       );
     }

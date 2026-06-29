@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 
 interface CreateEstimateModalProps {
   projectId: string;
-  takeoffVersionId?: string; // Optional - if not provided, uses latest CalcRun
   onClose: () => void;
   onSuccess: (result: { estimateId?: string | null; manualMode?: boolean }) => void;
 }
@@ -20,17 +19,8 @@ interface LaborVersionOption {
   status: string;
 }
 
-interface TakeoffVersion {
-  _id: string;
-  versionNumber: string;
-  versionName: string;
-  status: string;
-  createdAt: string;
-}
-
 export default function CreateEstimateModal({
   projectId,
-  takeoffVersionId,
   onClose,
   onSuccess,
 }: CreateEstimateModalProps) {
@@ -46,16 +36,10 @@ export default function CreateEstimateModal({
   const [loadingCmpdVersions, setLoadingCmpdVersions] = useState(true);
   const [laborVersions, setLaborVersions] = useState<LaborVersionOption[]>([]);
   const [loadingLaborVersions, setLoadingLaborVersions] = useState(true);
-  const [takeoffVersions, setTakeoffVersions] = useState<TakeoffVersion[]>([]);
-  const [loadingTakeoffVersions, setLoadingTakeoffVersions] = useState(true);
-  const [boqSourceInfo, setBoqSourceInfo] = useState({ hasProjectBOQ: false, itemCount: 0 });
-  const [loadingBoqInfo, setLoadingBoqInfo] = useState(true);
   const [pendingEstimateId, setPendingEstimateId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
-    boqSource: 'boqDatabase', // Default to BOQ Database (NEW)
-    takeoffVersionId: takeoffVersionId || '', // Specific version if provided
     location: '',
     district: '',
     cmpdVersion: '',
@@ -67,8 +51,6 @@ export default function CreateEstimateModal({
     loadLocations();
     loadCmpdVersions();
     loadLaborVersions();
-    loadTakeoffVersions();
-    loadBoqInfo();
   }, []);
 
   const loadLocations = async () => {
@@ -123,41 +105,6 @@ export default function CreateEstimateModal({
     }
   };
 
-  const loadTakeoffVersions = async () => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}/takeoff-versions`);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        setTakeoffVersions(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load takeoff versions:', err);
-    } finally {
-      setLoadingTakeoffVersions(false);
-    }
-  };
-
-  const loadBoqInfo = async () => {
-    try {
-      // Check new BOQ database
-      const response = await fetch(`/api/projects/${projectId}/boq/save`);
-      const data = await response.json();
-      
-      if (data.success) {
-        const latest = data.versions && data.versions[0];
-        setBoqSourceInfo({
-          hasProjectBOQ: data.hasBoq,
-          itemCount: latest?.itemCount || 0
-        });
-      }
-    } catch (err) {
-      console.error('Failed to load BOQ info:', err);
-    } finally {
-      setLoadingBoqInfo(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -174,13 +121,8 @@ export default function CreateEstimateModal({
         cmpdVersion: formData.cmpdVersion,
         laborVersion: formData.laborVersion,
         vatPercentage: formData.vatPercentage,
-        boqSource: formData.boqSource, // Tell API which source to use
+        boqSource: 'manual',
       };
-
-      // Only include takeoffVersionId if user selected a specific version
-      if (formData.boqSource === 'takeoffVersion' && formData.takeoffVersionId) {
-        payload.takeoffVersionId = formData.takeoffVersionId;
-      }
 
       const response = await fetch(`/api/projects/${projectId}/cost-estimates`, {
         method: 'POST',
@@ -292,67 +234,9 @@ export default function CreateEstimateModal({
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              BOQ Source <span className="text-red-500">*</span>
-            </label>
-            {loadingBoqInfo ? (
-              <div className="w-full border rounded px-3 py-2 text-gray-400">
-                Loading BOQ sources...
-              </div>
-            ) : (
-              <select
-                required
-                value={formData.boqSource}
-                onChange={(e) => setFormData({ ...formData, boqSource: e.target.value, takeoffVersionId: '' })}
-                className="w-full border rounded px-3 py-2"
-              >
-                <option value="boqDatabase">
-                  BOQ Database (from Takeoff) {boqSourceInfo.hasProjectBOQ ? `(${boqSourceInfo.itemCount} items)` : '(Empty)'}
-                </option>
-                <option value="takeoffVersion">Takeoff Version Snapshot</option>
-                <option value="calcRun">Latest Calculation Run (Legacy)</option>
-                <option value="manual">Manual BOQ Input</option>
-              </select>
-            )}
-            <p className="text-xs text-gray-500 mt-1">
-              {formData.boqSource === 'boqDatabase' && 'Uses persistent BOQ database from takeoff (recommended)'}
-              {formData.boqSource === 'takeoffVersion' && 'Uses specific takeoff version snapshot'}
-              {formData.boqSource === 'calcRun' && 'Uses latest calculation run (fallback)'}
-              {formData.boqSource === 'manual' && 'Set up manual Program of Works entries from DUPA templates'}
-            </p>
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            This project uses the manual Program of Works workflow. After setup, you will add BOQ entries directly from DUPA templates and current master data.
           </div>
-
-          {formData.boqSource === 'takeoffVersion' && (
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Select Takeoff Version <span className="text-red-500">*</span>
-              </label>
-              {loadingTakeoffVersions ? (
-                <div className="w-full border rounded px-3 py-2 text-gray-400">
-                  Loading versions...
-                </div>
-              ) : takeoffVersions.length === 0 ? (
-                <div className="text-sm text-red-600 p-2 bg-red-50 rounded">
-                  No takeoff versions found. Please create a takeoff version first.
-                </div>
-              ) : (
-                <select
-                  required
-                  value={formData.takeoffVersionId}
-                  onChange={(e) => setFormData({ ...formData, takeoffVersionId: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
-                >
-                  <option value="">Select version...</option>
-                  {takeoffVersions.map((version) => (
-                    <option key={version._id} value={version._id}>
-                      v{version.versionNumber} - {version.versionName} ({version.status})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

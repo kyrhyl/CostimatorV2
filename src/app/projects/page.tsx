@@ -128,10 +128,6 @@ export default function ProjectsPage() {
         body: JSON.stringify({
           projectName: newProjectName.trim(),
           projectLocation: selectedProject.projectLocation,
-          copyGrid: true,
-          copyLevels: true,
-          copyElementTemplates: true,
-          copyElementInstances: true,
           copySettings: true,
         }),
       });
@@ -394,7 +390,7 @@ export default function ProjectsPage() {
                 Source Project: <span className="font-medium">{selectedProject.projectName}</span>
               </p>
               <p className="text-sm text-gray-500 mb-4">
-                This will copy the grid system, levels, element templates, and instances. 
+                This will copy the project details and Program of Works setup.
                 Calculations and cost estimates will NOT be copied and must be regenerated.
               </p>
             </div>

@@ -115,11 +115,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
       await loadEstimates();
 
       if (duplicatedId) {
-        if (isTakeoffLinkedEstimate(duplicatedEstimate)) {
-          router.push(`/projects/${projectId}/program-of-works?estimateId=${duplicatedId}&view=takeoff&section=overview`);
-        } else {
-          router.push(`/projects/${projectId}/program-of-works?section=manual-boq`);
-        }
+        router.push(`/projects/${projectId}/program-of-works?estimateId=${duplicatedId}&section=overview`);
       }
     } catch (err: any) {
       setNotice({ type: 'error', message: `Failed to duplicate: ${err.message}` });
@@ -198,27 +194,13 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
     if (source === 'manual') {
       return { label: 'Manual BOQ', className: 'bg-amber-100 text-amber-800' };
     }
-    if (source === 'projectBOQ') {
-      return { label: 'Takeoff Linked', className: 'bg-blue-100 text-blue-800' };
-    }
     if (source === 'takeoffVersion' || source === 'calcRun' || source === 'boqDatabase') {
-      return { label: 'Takeoff Linked', className: 'bg-blue-100 text-blue-800' };
+      return { label: 'Legacy Takeoff BOQ', className: 'bg-blue-100 text-blue-800' };
     }
-    if (estimate?.takeoffVersionId) {
-      return { label: 'Takeoff Linked', className: 'bg-blue-100 text-blue-800' };
+    if (source === 'projectBOQ' || estimate?.takeoffVersionId) {
+      return { label: 'Imported BOQ', className: 'bg-slate-100 text-slate-800' };
     }
     return { label: 'Unknown Source', className: 'bg-gray-100 text-gray-700' };
-  };
-
-  const isTakeoffLinkedEstimate = (estimate: any) => {
-    const source = estimate?.boqSource;
-    return (
-      source === 'projectBOQ' ||
-      source === 'takeoffVersion' ||
-      source === 'calcRun' ||
-      source === 'boqDatabase' ||
-      Boolean(estimate?.takeoffVersionId)
-    );
   };
 
   const getPowReportHref = (estimate: any) => {
@@ -226,10 +208,9 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
     if (!estimateId) {
       return `/projects/${projectId}/pow-report`;
     }
-    return `/projects/${projectId}/pow-report?mode=takeoff&estimateId=${estimateId}`;
+    return `/projects/${projectId}/pow-report?mode=manual&estimateId=${estimateId}`;
   };
 
-  const isManualPow = project?.powMode === 'manual';
   const roles = session?.user?.roles || [];
   const canModifyPow = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
 
@@ -253,7 +234,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
             No Program of Works Yet
           </h3>
           <p className="text-gray-700 mb-6">
-            Create your first cost estimate from a takeoff version to generate the Program of Works.
+            Create your first Program of Works version to start building quantities and cost estimates.
           </p>
           {canModifyPow ? (
             <button
@@ -278,10 +259,10 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
             onSuccess={(result) => {
               setShowCreateModal(false);
               loadEstimates();
-              if (result?.manualMode) {
+              if (result?.estimateId) {
+                router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&section=overview`);
+              } else {
                 router.push(`/projects/${projectId}/program-of-works?section=manual-boq`);
-              } else if (result?.estimateId) {
-                router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&view=takeoff&section=overview`);
               }
             }}
           />
@@ -391,11 +372,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                     </Link>
                     {!canModifyPow && (
                       <Link
-                        href={
-                          isTakeoffLinkedEstimate(estimate)
-                            ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
-                            : `/projects/${projectId}/program-of-works?section=manual-boq`
-                        }
+                        href={`/projects/${projectId}/program-of-works?estimateId=${estimate._id}&section=overview`}
                         className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-700 hover:text-dpwh-green-900 text-xs px-1.5 py-1 rounded hover:bg-green-50"
                         title="View workspace"
                       >
@@ -405,15 +382,9 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                     {canModifyPow && (
                       <>
                         <Link
-                          href={
-                            isTakeoffLinkedEstimate(estimate)
-                              ? `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
-                              : isManualPow
-                              ? `/projects/${projectId}/program-of-works?section=manual-boq`
-                              : `/projects/${projectId}/program-of-works?estimateId=${estimate._id}&view=takeoff&section=overview`
-                          }
+                          href={`/projects/${projectId}/program-of-works?estimateId=${estimate._id}&section=overview`}
                           className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-600 hover:text-dpwh-green-800 text-xs px-1.5 py-1 rounded hover:bg-green-50"
-                          title={isTakeoffLinkedEstimate(estimate) ? 'Edit this version in workspace' : 'Open manual BOQ workspace'}
+                          title="Edit this version in workspace"
                         >
                           Edit Workspace
                         </Link>
@@ -485,10 +456,10 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
           onSuccess={(result) => {
             setShowCreateModal(false);
             loadEstimates();
-            if (result?.manualMode) {
+            if (result?.estimateId) {
+              router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&section=overview`);
+            } else {
               router.push(`/projects/${projectId}/program-of-works?section=manual-boq`);
-            } else if (result?.estimateId) {
-              router.push(`/projects/${projectId}/program-of-works?estimateId=${result.estimateId}&view=takeoff&section=overview`);
             }
           }}
         />

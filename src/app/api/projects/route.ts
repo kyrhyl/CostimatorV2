@@ -17,7 +17,7 @@ const ProjectSchema = z.object({
   appropriation: z.coerce.number().min(0).default(0),
   contractId: z.string().optional(),
   projectType: z.string().optional(),
-  powMode: z.enum(['takeoff', 'manual']).optional().default('takeoff'),
+  powMode: z.enum(['takeoff', 'manual']).optional().default('manual'),
   status: z
     .enum(['Planning', 'Approved', 'Ongoing', 'Completed', 'Cancelled'])
     .default('Planning'),

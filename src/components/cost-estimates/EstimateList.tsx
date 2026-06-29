@@ -44,7 +44,7 @@ export default function EstimateList({ projectId }: EstimateListProps) {
   if (estimates.length === 0) {
     return (
       <div className="text-gray-500 text-center py-8">
-        No cost estimates yet. Create one from a takeoff version.
+        No Program of Works versions yet. Create one to start your cost build-up.
       </div>
     );
   }
@@ -54,7 +54,7 @@ export default function EstimateList({ projectId }: EstimateListProps) {
       {estimates.map((est) => (
         <Link
           key={est._id}
-          href={`/projects/${projectId}/program-of-works?estimateId=${est._id}&view=takeoff&section=overview`}
+          href={`/projects/${projectId}/program-of-works?estimateId=${est._id}&section=overview`}
           className="block border rounded-lg p-4 hover:bg-gray-50 transition"
         >
           <div className="flex justify-between items-start">

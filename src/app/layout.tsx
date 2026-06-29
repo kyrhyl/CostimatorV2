@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "Costimator - DPWH Cost Estimation System",
-  description: "Integrated quantity takeoff, UPA/DUPA, and BOQ management for DPWH projects",
+  description: "Integrated cost estimation, DUPA, and BOQ management for DPWH projects",
 };
 
 export default function RootLayout({

@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -9,20 +9,8 @@ import VersionStatusBadge from '@/components/versioning/VersionStatusBadge';
 import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal';
 import { fetchJsonDedup } from '@/lib/utils/fetch-json-dedup';
 
-const EstimateList = dynamic(() => import('@/components/cost-estimates/EstimateList'), {
-  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading estimates...</div>
-});
-const TakeoffViewer = dynamic(() => import('@/components/takeoff/TakeoffViewer'), {
-  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading takeoff viewer...</div>
-});
-const BOQViewer = dynamic(() => import('@/components/takeoff/BOQViewer'), {
-  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading BOQ viewer...</div>
-});
-const CalcRunList = dynamic(() => import('@/components/takeoff/CalcRunList'), {
-  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading calculation runs...</div>
-});
 const ProgramOfWorksTab = dynamic(() => import('./components/ProgramOfWorksTab'), {
-  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading program of works...</div>
+  loading: () => <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading program of works...</div>,
 });
 
 interface Project {
@@ -44,7 +32,6 @@ interface Project {
   distanceFromOffice: number;
   createdAt: string;
   updatedAt: string;
-  // DPWH POW fields
   address?: string;
   targetStartDate?: string;
   targetCompletionDate?: string;
@@ -98,23 +85,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'estimates' | 'takeoff'>('overview');
-  const [activeTakeoffSubTab, setActiveTakeoffSubTab] = useState<'takeoff-report' | 'boq' | 'versions'>('takeoff-report');
+  const [activeTab, setActiveTab] = useState<'overview' | 'estimates'>('overview');
   const [estimates, setEstimates] = useState<ProjectEstimate[]>([]);
   const [versionSummary, setVersionSummary] = useState<{
-    activeTakeoffVersion?: { _id: string; versionNumber: number; versionLabel: string; status: string; createdAt: string; boqLineCount: number };
     activeCostEstimate?: { estimateNumber: string; grandTotal: number; cmpdVersion: string; status: string; createdAt: string };
-    totalVersions: number;
     totalEstimates: number;
   } | null>(null);
-  
-  // New state for takeoff dashboard
-  const [latestCalcRun, setLatestCalcRun] = useState<any>(null);
-  const [loadingTakeoffData, setLoadingTakeoffData] = useState(false);
-  
-  // Program of Works modal
   const [showCreateEstimateModal, setShowCreateEstimateModal] = useState(false);
-  const [selectedTakeoffVersionId, setSelectedTakeoffVersionId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProject();
@@ -124,7 +101,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     const syncTabFromUrl = () => {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
-      if (tabParam === 'overview' || tabParam === 'takeoff' || tabParam === 'estimates') {
+      if (tabParam === 'overview' || tabParam === 'estimates') {
         setActiveTab(tabParam);
       }
     };
@@ -138,9 +115,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     if (activeTab === 'estimates') {
       fetchEstimates();
     }
-    if (activeTab === 'takeoff') {
-      fetchLatestTakeoffData();
-    }
   }, [activeTab, id]);
 
   const fetchProject = async () => {
@@ -150,7 +124,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       if (result.success) {
         setProject(result.data);
       } else {
@@ -170,7 +144,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       if (result.success) {
         setEstimates(result.data);
       } else {
@@ -183,160 +157,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const fetchVersionSummary = async () => {
     try {
-      const [versionsResult, estimatesResult] = await Promise.all([
-        fetchJsonDedup(`/api/projects/${id}/takeoff-versions`, `takeoff-versions:${id}`),
-        fetchJsonDedup(`/api/projects/${id}/cost-estimates`, `cost-estimates:${id}`),
-      ]);
+      const estimatesResult = await fetchJsonDedup(`/api/projects/${id}/cost-estimates`, `cost-estimates:${id}`);
 
-      if (versionsResult.res.ok && estimatesResult.res.ok) {
-        const versionsData = versionsResult.data;
+      if (estimatesResult.res.ok) {
         const estimatesData = estimatesResult.data;
-        
-        if (versionsData.success && estimatesData.success) {
-          const versions = versionsData.data || [];
-          const estimates = estimatesData.data || [];
-          
-          // Find active version (most recent approved or latest)
-          const activeVersion = versions.find((v: any) => v.status === 'approved') || versions[0];
-          
-          // Find active estimate (most recent approved or latest)
-          const activeEstimate = estimates.find((e: any) => e.status === 'approved') || estimates[0];
-          
+        if (estimatesData.success) {
+          const estimateRows = estimatesData.data || [];
+          const activeEstimate = estimateRows.find((e: any) => e.status === 'approved') || estimateRows[0];
+
           setVersionSummary({
-            activeTakeoffVersion: activeVersion ? {
-              _id: activeVersion._id,
-              versionNumber: activeVersion.versionNumber,
-              versionLabel: activeVersion.versionLabel,
-              status: activeVersion.status,
-              createdAt: activeVersion.createdAt,
-              boqLineCount: activeVersion.boqLines?.length || 0
-            } : undefined,
-            activeCostEstimate: activeEstimate ? {
-              estimateNumber: activeEstimate.estimateNumber,
-              grandTotal: activeEstimate.costSummary?.grandTotal || 0,
-              cmpdVersion: activeEstimate.cmpdVersion,
-              status: activeEstimate.status,
-              createdAt: activeEstimate.createdAt
-            } : undefined,
-            totalVersions: versions.length,
-            totalEstimates: estimates.length
+            activeCostEstimate: activeEstimate
+              ? {
+                  estimateNumber: activeEstimate.estimateNumber,
+                  grandTotal: activeEstimate.costSummary?.grandTotal || 0,
+                  cmpdVersion: activeEstimate.cmpdVersion,
+                  status: activeEstimate.status,
+                  createdAt: activeEstimate.createdAt,
+                }
+              : undefined,
+            totalEstimates: estimateRows.length,
           });
         }
       }
     } catch (error) {
       console.error('Failed to fetch version summary:', error);
-    }
-  };
-
-  const fetchLatestTakeoffData = async () => {
-    setLoadingTakeoffData(true);
-    try {
-      const { res: calcRunRes, data: calcRunData } = await fetchJsonDedup(`/api/projects/${id}/calcruns/latest`, `latest-calcrun:${id}`);
-      if (calcRunRes.ok) {
-        const calcRun = calcRunData.data; // API returns { success: true, data: calcRun }
-        setLatestCalcRun(calcRun);
-      } else {
-        setLatestCalcRun(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch takeoff data:', error);
-      setLatestCalcRun(null);
-    } finally {
-      setLoadingTakeoffData(false);
-    }
-  };
-
-  const handleGenerateEstimate = async () => {
-    if (!confirm('Generate a new program of works from current BOQ items?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/projects/${id}/estimates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estimateType: 'detailed',
-          preparedBy: 'User',
-          notes: 'Generated from project BOQ',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        alert(result.message || 'Estimate generated successfully');
-        fetchEstimates();
-      } else {
-        alert('Failed to generate estimate: ' + result.error);
-      }
-    } catch (error: any) {
-      console.error('Failed to generate estimate:', error);
-      alert('Failed to generate estimate: ' + error.message);
-    }
-  };
-
-  const handleSubmitEstimate = async (version: number) => {
-    if (!confirm(`Submit estimate version ${version} for approval?`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/projects/${id}/estimates/${version}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preparedBy: 'User' }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        alert(result.message || 'Estimate submitted');
-        fetchEstimates();
-      } else {
-        alert('Failed to submit estimate: ' + result.error);
-      }
-    } catch (error: any) {
-      console.error('Failed to submit estimate:', error);
-      alert('Failed to submit estimate: ' + error.message);
-    }
-  };
-
-  const handleApproveEstimate = async (version: number) => {
-    if (!confirm(`Approve estimate version ${version}?`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/projects/${id}/estimates/${version}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approvedBy: 'Admin' }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        alert(result.message || 'Estimate approved');
-        fetchEstimates();
-      } else {
-        alert('Failed to approve estimate: ' + result.error);
-      }
-    } catch (error: any) {
-      console.error('Failed to approve estimate:', error);
-      alert('Failed to approve estimate: ' + error.message);
     }
   };
 
@@ -377,12 +221,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     project?.status === 'Completed'
       ? 'bg-emerald-100 text-emerald-800'
       : project?.status === 'Ongoing'
-      ? 'bg-blue-100 text-blue-800'
-      : project?.status === 'Approved'
-      ? 'bg-cyan-100 text-cyan-800'
-      : project?.status === 'Cancelled'
-      ? 'bg-red-100 text-red-800'
-      : 'bg-slate-100 text-slate-800';
+        ? 'bg-blue-100 text-blue-800'
+        : project?.status === 'Approved'
+          ? 'bg-cyan-100 text-cyan-800'
+          : project?.status === 'Cancelled'
+            ? 'bg-red-100 text-red-800'
+            : 'bg-slate-100 text-slate-800';
   const latitude = project?.projectComponent?.coordinates?.latitude;
   const longitude = project?.projectComponent?.coordinates?.longitude;
   const hasCoordinates = typeof latitude === 'number' && typeof longitude === 'number';
@@ -410,12 +254,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="container mx-auto p-6">
-      {/* Header */}
       <div className="mb-6">
-        <Link
-          href="/projects"
-          className="text-blue-600 hover:text-blue-800 mb-2 inline-block"
-        >
+        <Link href="/projects" className="text-blue-600 hover:text-blue-800 mb-2 inline-block">
           ← Back to Projects
         </Link>
         <div className="flex justify-between items-start">
@@ -425,19 +265,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           {activeTab === 'overview' && canEditProject ? (
             <div className="flex gap-2">
-              {canEditProject && (
-                <Link
-                  href={`/projects/${id}/edit`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Edit Project
-                </Link>
-              )}
+              <Link href={`/projects/${id}/edit`} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Edit Project
+              </Link>
               {canDeleteProject && (
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                >
+                <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
                   Delete
                 </button>
               )}
@@ -456,7 +288,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex space-x-8">
           <button
@@ -470,16 +301,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             Project Overview
           </button>
           <button
-            onClick={() => setActiveTab('takeoff')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'takeoff'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Quantity Takeoff
-          </button>
-          <button
             onClick={() => setActiveTab('estimates')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'estimates'
@@ -489,15 +310,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           >
             Program of Works
             {estimates.length > 0 && (
-              <span className="ml-2 bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">
-                {estimates.length}
-              </span>
+              <span className="ml-2 bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">{estimates.length}</span>
             )}
           </button>
         </nav>
       </div>
 
-      {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <section className="rounded-2xl border border-dpwh-blue-200 bg-gradient-to-br from-dpwh-blue-700 via-dpwh-blue-600 to-cyan-700 px-6 py-5 text-white shadow-lg">
@@ -509,7 +327,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="text-right">
                 <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                  {project.powMode === 'manual' ? 'Manual POW' : 'Takeoff Linked'}
+                  Manual Program of Works
                 </span>
                 <div className="mt-2 text-xs text-blue-100">Last updated {formatDate(project.updatedAt)}</div>
               </div>
@@ -548,7 +366,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <div className="grid grid-cols-1 gap-4 p-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Contract ID</p><p className="mt-1 font-semibold text-slate-900">{project.contractId || 'N/A'}</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Project Type</p><p className="mt-1 font-semibold text-slate-900">{project.projectType || 'N/A'}</p></div>
-                  <div><p className="text-xs uppercase tracking-wide text-slate-500">POW Mode</p><p className="mt-1 font-semibold capitalize text-slate-900">{project.powMode || 'takeoff'}</p></div>
+                  <div><p className="text-xs uppercase tracking-wide text-slate-500">POW Mode</p><p className="mt-1 font-semibold capitalize text-slate-900">manual</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Location</p><p className="mt-1 font-semibold text-slate-900">{project.projectLocation || 'N/A'}</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">District</p><p className="mt-1 font-semibold text-slate-900">{project.district || 'N/A'}</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">CMPD Version</p><p className="mt-1 font-semibold text-slate-900">{project.cmpdVersion || 'Latest'}</p></div>
@@ -614,46 +432,27 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </section>
 
-              {versionSummary && (versionSummary.totalVersions > 0 || versionSummary.totalEstimates > 0) && (
+              {versionSummary && versionSummary.totalEstimates > 0 && (
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
                     <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Version Summary</h3>
                   </div>
                   <div className="space-y-3 p-5">
-                    <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-                      <div className="rounded-md border border-slate-200 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="font-medium text-slate-700">Active Takeoff</span>
-                          {versionSummary.activeTakeoffVersion && <VersionStatusBadge status={versionSummary.activeTakeoffVersion.status as any} />}
-                        </div>
-                        {versionSummary.activeTakeoffVersion ? (
-                          <>
-                            <div className="font-semibold text-slate-900">V{versionSummary.activeTakeoffVersion.versionNumber} - {versionSummary.activeTakeoffVersion.versionLabel}</div>
-                            <div className="mt-1 text-xs text-slate-500">{versionSummary.activeTakeoffVersion.boqLineCount} BOQ items</div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-slate-500">No takeoff versions yet</div>
-                        )}
+                    <div className="rounded-md border border-slate-200 p-3 text-sm">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="font-medium text-slate-700">Active Program of Works</span>
+                        {versionSummary.activeCostEstimate && <VersionStatusBadge status={versionSummary.activeCostEstimate.status as any} />}
                       </div>
-                      <div className="rounded-md border border-slate-200 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="font-medium text-slate-700">Active Program of Works</span>
-                          {versionSummary.activeCostEstimate && <VersionStatusBadge status={versionSummary.activeCostEstimate.status as any} />}
-                        </div>
-                        {versionSummary.activeCostEstimate ? (
-                          <>
-                            <div className="font-semibold text-slate-900">{versionSummary.activeCostEstimate.estimateNumber}</div>
-                            <div className="mt-1 text-sm font-semibold text-emerald-700">₱{versionSummary.activeCostEstimate.grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-slate-500">No program of works yet</div>
-                        )}
-                      </div>
+                      {versionSummary.activeCostEstimate ? (
+                        <>
+                          <div className="font-semibold text-slate-900">{versionSummary.activeCostEstimate.estimateNumber}</div>
+                          <div className="mt-1 text-sm font-semibold text-emerald-700">₱{versionSummary.activeCostEstimate.grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-slate-500">No program of works yet</div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Total versions: {versionSummary.totalVersions} • Total estimates: {versionSummary.totalEstimates}</span>
-                      <Link href={`/takeoff/${id}#versions`} className="font-medium text-blue-600 hover:text-blue-800">Manage Versions</Link>
-                    </div>
+                    <div className="text-xs text-slate-500">Total Program of Works versions: {versionSummary.totalEstimates}</div>
                   </div>
                 </section>
               )}
@@ -726,189 +525,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {activeTab === 'takeoff' && (
-        <div className="space-y-6">
-          {/* Sub-tab Navigation */}
-          <div className="border-b border-gray-200">
-            <nav className="flex gap-2" aria-label="Takeoff sub-tabs">
-              <button
-                onClick={() => setActiveTakeoffSubTab('takeoff-report')}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                  activeTakeoffSubTab === 'takeoff-report'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <span>📐</span>
-                  <span>Takeoff Report</span>
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTakeoffSubTab('boq')}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                  activeTakeoffSubTab === 'boq'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <span>📋</span>
-                  <span>Bill of Quantities</span>
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTakeoffSubTab('versions')}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                  activeTakeoffSubTab === 'versions'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <span>🕐</span>
-                  <span>Version History</span>
-                </span>
-              </button>
-            </nav>
-          </div>
+      {activeTab === 'estimates' && <ProgramOfWorksTab projectId={id} project={project} />}
 
-          {/* Sub-tab Content */}
-          <div>
-            {/* Takeoff Report Sub-tab */}
-            {activeTakeoffSubTab === 'takeoff-report' && (
-              <>
-                {loadingTakeoffData ? (
-                  <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                    <p className="text-gray-600">Loading takeoff data...</p>
-                  </div>
-                ) : !latestCalcRun ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-12 text-center">
-                    <div className="text-6xl mb-4">📐</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      Generate Your First Takeoff
-                    </h3>
-                    <div className="text-left max-w-2xl mx-auto mb-6 space-y-3">
-                      <p className="text-gray-700 font-medium">Follow these steps to get started:</p>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>Set up your Grid System (coordinate reference)</li>
-                        <li>Define Floor Levels (vertical organization)</li>
-                        <li>Create Element Templates (columns, beams, slabs, etc.)</li>
-                        <li>Place Element Instances on your levels</li>
-                        <li>Generate Takeoff (return to this tab to view results)</li>
-                      </ol>
-                    </div>
-                    <Link
-                      href={`/takeoff/${id}`}
-                      className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all shadow-lg"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      Open Advanced Workspace
-                    </Link>
-                  </div>
-                ) : (
-                  <TakeoffViewer
-                    projectId={id}
-                    latestCalcRun={latestCalcRun}
-                    onTakeoffGenerated={async () => {
-                      await fetchLatestTakeoffData();
-                    }}
-                  />
-                )}
-              </>
-            )}
-
-            {/* BOQ Sub-tab */}
-            {activeTakeoffSubTab === 'boq' && (
-              <>
-                {loadingTakeoffData ? (
-                  <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                    <p className="text-gray-600">Loading BOQ data...</p>
-                  </div>
-                ) : !latestCalcRun ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-12 text-center">
-                    <div className="text-6xl mb-4">⚠️</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      No Takeoff Data Available
-                    </h3>
-                    <p className="text-gray-600 mb-6">
-                      You must generate a takeoff first before creating a Bill of Quantities.
-                    </p>
-                    <button
-                      onClick={() => setActiveTakeoffSubTab('takeoff-report')}
-                      className="inline-flex items-center gap-2 bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-yellow-700 transition-all shadow-lg"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                      Go to Takeoff Report Tab
-                    </button>
-                  </div>
-                ) : (
-                  <BOQViewer
-                    projectId={id}
-                    takeoffLines={latestCalcRun.takeoffLines || []}
-                  />
-                )}
-              </>
-            )}
-
-            {/* Version History Sub-tab */}
-            {activeTakeoffSubTab === 'versions' && (
-              <CalcRunList projectId={id} />
-            )}
-          </div>
-
-          {/* Advanced Workspace Link Card */}
-          <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <div className="text-3xl">🏗️</div>
-              <div className="flex-1">
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                  Need Advanced Features?
-                </h4>
-                <p className="text-gray-600 mb-4">
-                  The Advanced Workspace provides 3D modeling tools, element libraries, grid systems, 
-                  and interactive quantity calculations for complex takeoff scenarios.
-                </p>
-                <Link
-                  href={`/takeoff/${id}`}
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                >
-                  Open Advanced Workspace
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'estimates' && (
-        <ProgramOfWorksTab projectId={id} project={project} />
-      )}
-      
       {showCreateEstimateModal && (
         <CreateEstimateModal
           projectId={id}
-          takeoffVersionId={selectedTakeoffVersionId || undefined}
           onClose={() => {
             setShowCreateEstimateModal(false);
-            setSelectedTakeoffVersionId(null);
           }}
           onSuccess={(result) => {
             setShowCreateEstimateModal(false);
-            setSelectedTakeoffVersionId(null);
-            if (result?.manualMode) {
+            if (result?.estimateId) {
+              router.push(`/projects/${id}/program-of-works?estimateId=${result.estimateId}&section=overview`);
+            } else {
               router.push(`/projects/${id}/program-of-works?section=manual-boq`);
-            } else if (result?.estimateId) {
-              router.push(`/projects/${id}/program-of-works?estimateId=${result.estimateId}&view=takeoff&section=overview`);
             }
           }}
         />

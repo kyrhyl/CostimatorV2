@@ -47,14 +47,14 @@ export default function Home() {
   const modules = [
     {
       title: 'Projects',
-      description: 'Complete project management with integrated quantity takeoff and BOQ',
+      description: 'Complete project management for program of works, BOQ, and cost estimation',
       href: '/projects',
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       ),
-      stats: ['Takeoff', 'BOQ', 'Estimates', 'Tracking'],
+      stats: ['BOQ', 'Estimates', 'POW', 'Tracking'],
       gradient: 'from-blue-500 to-blue-600',
       requiresAuth: true,
     },
@@ -176,9 +176,9 @@ export default function Home() {
                 Professional Construction Cost Management System
               </h2>
               <p className="text-lg text-slate-100 leading-relaxed mb-8">
-                Integrated platform for quantity takeoff, detailed unit price analysis (DUPA), and bill of quantities 
-                generation compliant with DPWH Volume III standards. Streamline your construction project estimation 
-                workflow with automated calculations and comprehensive data management.
+                 Integrated platform for detailed unit price analysis (DUPA), bill of quantities,
+                 and program of works generation compliant with DPWH Volume III standards. Streamline your construction project estimation 
+                 workflow with automated calculations and comprehensive data management.
               </p>
 
               {!isAuthenticated && (

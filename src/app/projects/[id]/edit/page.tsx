@@ -60,7 +60,7 @@ export default function EditProjectPage() {
   const [appropriation, setAppropriation] = useState('');
   const [contractId, setContractId] = useState('');
   const [projectType, setProjectType] = useState('Road Construction');
-  const [powMode, setPowMode] = useState<'takeoff' | 'manual'>('takeoff');
+  const [powMode] = useState<'takeoff' | 'manual'>('manual');
   const [status, setStatus] = useState('Planning');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -133,7 +133,7 @@ export default function EditProjectPage() {
         setAppropriation(formatCurrencyInput(project.appropriation?.toString() || ''));
         setContractId(project.contractId || '');
         setProjectType(project.projectType || 'Road Construction');
-        setPowMode(project.powMode || 'takeoff');
+        // Quantity take-off is retired; keep all edited projects in manual POW mode.
         setStatus(project.status || 'Planning');
         setDescription(project.description || '');
         setDistanceFromOffice(project.distanceFromOffice || 0);
@@ -520,16 +520,11 @@ export default function EditProjectPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Program of Works Mode
                 </label>
-                <select
-                  value={powMode}
-                  onChange={(e) => setPowMode(e.target.value as 'takeoff' | 'manual')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="takeoff">Takeoff Linked</option>
-                  <option value="manual">Manual BOQ Input</option>
-                </select>
+                <div className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700">
+                  Manual BOQ Input
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Select “Manual BOQ Input” when the Program of Works will be prepared independently of quantity takeoff.
+                  Quantity take-off is retired. Program of Works entries are prepared independently through the manual BOQ workflow.
                 </p>
               </div>
 

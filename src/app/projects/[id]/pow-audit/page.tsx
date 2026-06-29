@@ -134,7 +134,7 @@ export default function PowAuditPage() {
           </p>
         </div>
         <Link
-          href={`/projects/${projectId}/pow-report?mode=takeoff&estimateId=${estimateId}`}
+          href={`/projects/${projectId}/pow-report?mode=manual&estimateId=${estimateId}`}
           className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
         >
           Open POW Report
