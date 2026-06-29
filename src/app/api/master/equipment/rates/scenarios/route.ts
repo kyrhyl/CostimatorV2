@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import EquipmentRateScenario from '@/models/EquipmentRateScenario';
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export async function GET(request: NextRequest) {
   try {
     await dbConnect();
@@ -21,8 +24,8 @@ export async function GET(request: NextRequest) {
     }).sort({ updatedAt: -1 }).lean();
 
     return NextResponse.json({ success: true, data: scenarios });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Failed to load scenario' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: getErrorMessage(error, 'Failed to load scenario') }, { status: 500 });
   }
 }
 
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
       isActive: true,
     }).select('name').lean();
 
-    const nameSet = new Set(existingNames.map((s: any) => String(s.name || '').toUpperCase()));
+    const nameSet = new Set(existingNames.map((s) => String(s.name || '').toUpperCase()));
     let finalName = name;
     if (nameSet.has(finalName)) {
       let n = 2;
@@ -66,8 +69,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, message: 'Scenario saved', data: scenario, createdName: finalName });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Failed to save scenario' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: getErrorMessage(error, 'Failed to save scenario') }, { status: 500 });
   }
 }
 
@@ -98,9 +101,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: 'Scenario deleted successfully' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to delete scenario' },
+      { success: false, error: getErrorMessage(error, 'Failed to delete scenario') },
       { status: 500 }
     );
   }
@@ -134,9 +137,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: 'Scenario updated', data: scenario });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update scenario' },
+      { success: false, error: getErrorMessage(error, 'Failed to update scenario') },
       { status: 500 }
     );
   }

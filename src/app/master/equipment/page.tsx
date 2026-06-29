@@ -16,8 +16,29 @@ interface Equipment {
   fuelCost?: number;
   lubeCost?: number;
   calculatedRate?: number;
+  hourlyRate?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ScenarioOption {
+  name: string;
+  fuelPricePerLiter: number;
+  lubePricePerLiter: number;
+  updatedAt?: string;
+}
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  createdName?: string;
+  summary?: {
+    parsedRows?: number;
+    fixedRatesUpserted?: number;
+    variableRatesUpserted?: number;
+  };
 }
 
 export default function EquipmentPage() {
@@ -26,7 +47,7 @@ export default function EquipmentPage() {
 
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [editionOptions, setEditionOptions] = useState<string[]>([]);
-  const [scenarioOptions, setScenarioOptions] = useState<Array<{ name: string; fuelPricePerLiter: number; lubePricePerLiter: number; updatedAt?: string }>>([]);
+  const [scenarioOptions, setScenarioOptions] = useState<ScenarioOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,6 +95,9 @@ export default function EquipmentPage() {
   const formatLph = (value: number) =>
     Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
+  const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback;
+
   useEffect(() => {
     fetchEquipment();
   }, [searchTerm, rateEdition, tableMode, scenarioName]);
@@ -93,7 +117,7 @@ export default function EquipmentPage() {
   const fetchEditions = async () => {
     try {
       const response = await fetch('/api/master/equipment/rates/editions');
-      const result = await response.json();
+      const result: ApiResponse<string[]> = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to load editions');
       }
@@ -116,11 +140,11 @@ export default function EquipmentPage() {
       params.append('equipmentVersion', rateEdition.trim().toUpperCase());
       params.append('edition', rateEdition.trim().toUpperCase());
       const response = await fetch(`/api/master/equipment/rates/scenarios?${params.toString()}`);
-      const result = await response.json();
+      const result: ApiResponse<ScenarioOption[]> = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Failed to load scenarios');
       const list = Array.isArray(result.data) ? result.data : [];
       setScenarioOptions(list);
-      if (list.length > 0 && !list.some((s: any) => s.name === scenarioName)) {
+      if (list.length > 0 && !list.some((s) => s.name === scenarioName)) {
         setScenarioName(list[0].name);
         setFuelPricePerLiter(String(list[0].fuelPricePerLiter ?? DEFAULT_FUEL_PRICE));
         setLubePricePerLiter(String(list[0].lubePricePerLiter ?? DEFAULT_LUBE_PRICE));
@@ -151,20 +175,20 @@ export default function EquipmentPage() {
       
       const response = await fetch(`/api/master/equipment?${params}`);
 
-      const result = await response.json();
+      const result: ApiResponse<Equipment[]> = await response.json();
 
       if (!response.ok) {
         throw new Error(result.error || `HTTP error! status: ${response.status}`);
       }
       
       if (result.success) {
-        setEquipment(result.data);
+        setEquipment(result.data ?? []);
         setError('');
       } else {
         setError(result.error || 'Failed to fetch equipment');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch equipment');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch equipment'));
     } finally {
       setLoading(false);
     }
@@ -188,7 +212,7 @@ export default function EquipmentPage() {
           lubePricePerLiter: Number(lubePricePerLiter || 0),
         }),
       });
-      const result = await response.json();
+      const result: ApiResponse<ScenarioOption> = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to save scenario');
       }
@@ -198,8 +222,8 @@ export default function EquipmentPage() {
       alert('Scenario saved successfully.');
       fetchScenarios();
       fetchEquipment();
-    } catch (err: any) {
-      alert(err.message || 'Failed to save scenario');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to save scenario'));
     }
   };
 
@@ -221,7 +245,7 @@ export default function EquipmentPage() {
       const response = await fetch(`/api/master/equipment/rates/scenarios?${params.toString()}`, {
         method: 'DELETE',
       });
-      const result = await response.json();
+      const result: ApiResponse = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to delete scenario');
       }
@@ -240,8 +264,8 @@ export default function EquipmentPage() {
 
       alert('Scenario deleted successfully.');
       fetchEquipment();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete scenario');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete scenario'));
     }
   };
 
@@ -264,7 +288,7 @@ export default function EquipmentPage() {
         }),
       });
 
-      const result = await response.json();
+      const result: ApiResponse<ScenarioOption> = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to update scenario');
       }
@@ -272,8 +296,8 @@ export default function EquipmentPage() {
       alert('Scenario updated successfully.');
       fetchScenarios();
       fetchEquipment();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update scenario');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to update scenario'));
     }
   };
 
@@ -293,7 +317,7 @@ export default function EquipmentPage() {
         method: 'POST',
         body: formData,
       });
-      const result = await response.json();
+      const result: ApiResponse = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to import ACEL CSV');
       }
@@ -305,8 +329,8 @@ export default function EquipmentPage() {
       setAcelCsvEdition('');
       fetchEditions();
       fetchEquipment();
-    } catch (err: any) {
-      alert(err.message || 'Failed to import ACEL CSV');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to import ACEL CSV'));
     } finally {
       setAcelCsvSubmitting(false);
     }
@@ -332,7 +356,7 @@ export default function EquipmentPage() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const result = await response.json();
+      const result: ApiResponse = await response.json();
       
       if (result.success) {
         setShowForm(false);
@@ -342,8 +366,8 @@ export default function EquipmentPage() {
       } else {
         alert(result.error || 'Failed to save equipment');
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to save equipment');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to save equipment'));
     }
   };
 
@@ -367,7 +391,7 @@ export default function EquipmentPage() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const result = await response.json();
+      const result: ApiResponse = await response.json();
       
       if (result.success) {
         alert(result.message);
@@ -377,8 +401,8 @@ export default function EquipmentPage() {
       } else {
         alert(result.error || 'Failed to import CSV');
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to import CSV');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to import CSV'));
     }
   };
 
@@ -408,15 +432,15 @@ export default function EquipmentPage() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const result = await response.json();
+      const result: ApiResponse = await response.json();
       
       if (result.success) {
         fetchEquipment();
       } else {
         alert(result.error || 'Failed to delete equipment');
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete equipment');
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, 'Failed to delete equipment'));
     }
   };
 
@@ -432,9 +456,9 @@ export default function EquipmentPage() {
     });
   };
 
-  const sampleCsv = `No,Complete Description,Description,Equipment Model,Capacity,Flywheel Horsepower,Rental Rate,Hourly Rate
-1,Motor Grader complete with Scarifier,Motor Grader,CAT 120G,93 kW (125 hp),125,5000,625
-2,Hydraulic Excavator with Bucket,Hydraulic Excavator,CAT 320D,90 kW (121 hp),121,4500,562.50`;
+  const sampleCsv = `No,Complete Description,Description,Equipment Model,Capacity,Flywheel Horsepower,FuelConsumptionAvgLph,LubeConsumptionAvgLph
+1,Motor Grader complete with Scarifier,Motor Grader,CAT 120G,93 kW (125 hp),125,13,0.0195
+2,Hydraulic Excavator with Bucket,Hydraulic Excavator,CAT 320D,90 kW (121 hp),121,12,0.0180`;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -661,10 +685,10 @@ export default function EquipmentPage() {
                 <div className="bg-gray-100 p-3 rounded text-xs font-mono overflow-x-auto">
                   {sampleCsv}
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
-                  First row must be headers. Supported headers: No/#/Number, Complete Description, Description, 
-                  Equipment Model/Model, Capacity, Flywheel Horsepower/HP, Rental Rate, Hourly Rate/Rate
-                </p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    First row must be headers. Supported headers: No/#/Number, Complete Description, Description,
+                    Equipment Model/Model, Capacity, Flywheel Horsepower/HP, FuelConsumptionAvgLph, LubeConsumptionAvgLph
+                  </p>
               </div>
 
               <div className="mb-4 space-y-2">
@@ -916,7 +940,7 @@ export default function EquipmentPage() {
                     )}
                     {tableMode === 'fixed' && (
                       <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">
-                        {formatCurrency(Number((eq as any).hourlyRate || 0))}
+                        {formatCurrency(Number(eq.hourlyRate || 0))}
                       </td>
                     )}
                     {tableMode === 'variable' && (
