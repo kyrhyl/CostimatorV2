@@ -17,7 +17,7 @@ export function computeDupaTotals(input: {
   vatPercent: number;
 }) {
   const directCostSubmitted = (input.laborTotal || 0) + (input.equipmentTotal || 0);
-  const directUnitCostSubmitted = safeDivide(directCostSubmitted, input.outputPerHour || 1);
+  const directUnitCostSubmitted = safeDivide(directCostSubmitted, input.outputPerHour || 0);
   const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + (input.materialTotal || 0);
   const ocmValue = directUnitPlusMaterialsSubmitted * ((input.ocmPercent || 0) / 100);
   const cpValue = directUnitPlusMaterialsSubmitted * ((input.cpPercent || 0) / 100);

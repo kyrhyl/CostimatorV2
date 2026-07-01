@@ -22,6 +22,8 @@ export interface DupaMaterialLine {
   description: string;
   unit: string;
   quantity: number;
+  basePrice?: number;
+  haulingCost?: number;
   unitCost: number;
   amount: number;
 }
@@ -61,5 +63,9 @@ export interface DupaItemBreakdown {
 export interface DupaReportData {
   header: PowHeader;
   signatories: Signatories;
+  pricing?: {
+    equipmentRateEdition?: string;
+    equipmentRateMode?: 'fixed' | 'variable_fuel_lube';
+  };
   items: DupaItemBreakdown[];
 }

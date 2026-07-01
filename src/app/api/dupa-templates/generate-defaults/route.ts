@@ -114,6 +114,8 @@ export async function POST(request: NextRequest) {
           // Minor tools configuration
           includeMinorTools: true,
           minorToolsPercentage: 10,
+          includeConsumables: false,
+          consumablesPercentage: 10,
           
           // Metadata
           part: payItem.part || '',

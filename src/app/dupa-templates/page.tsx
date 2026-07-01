@@ -23,15 +23,53 @@ interface DUPATemplate {
   updatedAt: string;
 }
 
+const getCanonicalPartValue = (value?: string | null) => {
+  const normalizedValue = value?.trim();
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  const canonicalMatch = normalizedValue.toUpperCase().match(/^PART\s+[A-Z]/);
+  return canonicalMatch ? canonicalMatch[0] : normalizedValue;
+};
+
+const getUniqueNormalizedValues = (
+  values: Array<string | null | undefined>,
+  normalizeValue: (value?: string | null) => string = (value) => value?.trim() || '',
+) => {
+  const seen = new Set<string>();
+
+  return values.reduce<string[]>((result, value) => {
+    const normalizedValue = normalizeValue(value);
+
+    if (!normalizedValue) {
+      return result;
+    }
+
+    const dedupeKey = normalizedValue.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      return result;
+    }
+
+    seen.add(dedupeKey);
+    result.push(normalizedValue);
+    return result;
+  }, []).sort((left, right) => left.localeCompare(right));
+};
+
 export default function DUPATemplatesPage() {
+  const [mounted, setMounted] = useState(false);
   const [templates, setTemplates] = useState<DUPATemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'common' | 'all'>('common');
+  const [hasActivatedShowAll, setHasActivatedShowAll] = useState(false);
+  const [sortBy, setSortBy] = useState<'payItemNumber' | 'part'>('payItemNumber');
+  const [payItemSortOrder, setPayItemSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
-  const [hasRequestedLoad, setHasRequestedLoad] = useState(false);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,13 +82,6 @@ export default function DUPATemplatesPage() {
   const [parts, setParts] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   
-  // Instantiate modal
-  const [showInstantiateModal, setShowInstantiateModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<DUPATemplate | null>(null);
-  const [instantiateLocation, setInstantiateLocation] = useState('');
-  const [useEvaluated, setUseEvaluated] = useState(false);
-  const [instantiating, setInstantiating] = useState(false);
-
   // Generate defaults modal
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [generatePart, setGeneratePart] = useState('');
@@ -58,8 +89,12 @@ export default function DUPATemplatesPage() {
   const [generating, setGenerating] = useState(false);
   const [generateResult, setGenerateResult] = useState<any>(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const fetchTemplates = useCallback(async () => {
-    if (!hasRequestedLoad && !searchTerm.trim()) {
+    if (viewMode === 'all' && !hasActivatedShowAll && !searchTerm.trim() && !partFilter && !categoryFilter && statusFilter === 'all' && favoriteFilter === 'all') {
       setTemplates([]);
       setTotalCount(0);
       setHasMore(false);
@@ -71,11 +106,13 @@ export default function DUPATemplatesPage() {
       setLoading(true);
       setError('');
       const params = new URLSearchParams();
-      const requestedLimit = viewMode === 'all' ? '5000' : '50';
+      const requestedLimit = '5000';
 
       params.append('view', viewMode);
       params.append('page', String(page));
       params.append('limit', requestedLimit);
+      params.append('sortBy', sortBy);
+      params.append('order', payItemSortOrder);
       if (searchTerm) params.append('search', searchTerm);
       if (partFilter) params.append('part', partFilter);
       if (categoryFilter) params.append('category', categoryFilter);
@@ -93,12 +130,12 @@ export default function DUPATemplatesPage() {
 
         // Extract unique parts
         if (page === 1) {
-          const uniqueParts = [...new Set(nextRows.map((t: DUPATemplate) => t.part).filter(Boolean))];
-          setParts(uniqueParts as string[]);
+          const uniqueParts = getUniqueNormalizedValues(nextRows.map((t: DUPATemplate) => t.part), getCanonicalPartValue);
+          setParts(uniqueParts);
 
           // Extract unique categories
-          const cats = [...new Set(nextRows.map((t: DUPATemplate) => t.category).filter(Boolean))];
-          setCategories(cats as string[]);
+          const cats = getUniqueNormalizedValues(nextRows.map((t: DUPATemplate) => t.category));
+          setCategories(cats);
         }
 
       } else {
@@ -109,7 +146,7 @@ export default function DUPATemplatesPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, partFilter, categoryFilter, statusFilter, favoriteFilter, viewMode, page, hasRequestedLoad]);
+  }, [searchTerm, partFilter, categoryFilter, statusFilter, favoriteFilter, viewMode, page, hasActivatedShowAll, payItemSortOrder, sortBy]);
 
   useEffect(() => {
     fetchTemplates();
@@ -117,7 +154,17 @@ export default function DUPATemplatesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, partFilter, categoryFilter, statusFilter, favoriteFilter, viewMode]);
+  }, [searchTerm, partFilter, categoryFilter, statusFilter, favoriteFilter, viewMode, payItemSortOrder, sortBy]);
+
+  const toggleSort = (column: 'payItemNumber' | 'part') => {
+    if (sortBy === column) {
+      setPayItemSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortBy(column);
+    setPayItemSortOrder('asc');
+  };
 
   const refreshFromFirstPage = () => {
     if (page !== 1) {
@@ -169,13 +216,6 @@ export default function DUPATemplatesPage() {
     }
   };
 
-  const openInstantiateModal = (template: DUPATemplate) => {
-    setSelectedTemplate(template);
-    setInstantiateLocation('');
-    setUseEvaluated(false);
-    setShowInstantiateModal(true);
-  };
-
   const handleGenerateDefaults = async () => {
     try {
       setGenerating(true);
@@ -203,38 +243,6 @@ export default function DUPATemplatesPage() {
       alert(err.message || 'Failed to generate templates');
     } finally {
       setGenerating(false);
-    }
-  };
-
-  const handleInstantiate = async () => {
-    if (!selectedTemplate || !instantiateLocation.trim()) {
-      alert('Please enter a location');
-      return;
-    }
-
-    try {
-      setInstantiating(true);
-      const response = await fetch(`/api/dupa-templates/${selectedTemplate._id}/instantiate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: instantiateLocation,
-          useEvaluated,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert(`Template instantiated successfully!\nRate Item ID: ${data.data._id}`);
-        setShowInstantiateModal(false);
-      } else {
-        alert(data.error || 'Failed to instantiate template');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Failed to instantiate template');
-    } finally {
-      setInstantiating(false);
     }
   };
 
@@ -269,6 +277,12 @@ export default function DUPATemplatesPage() {
     }
   };
 
+  const actionButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50';
+
+  if (!mounted) {
+    return <div className="min-h-screen bg-gray-50" suppressHydrationWarning={true} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-8" suppressHydrationWarning>
       <div className="max-w-7xl mx-auto">
@@ -294,22 +308,22 @@ export default function DUPATemplatesPage() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="inline-flex rounded-lg border border-gray-200 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setHasRequestedLoad(true);
-                  setViewMode('common');
-                }}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasActivatedShowAll(false);
+                        setViewMode('common');
+                      }}
                 className={`px-3 py-1.5 text-sm rounded-md ${viewMode === 'common' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
                 Common Templates
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setHasRequestedLoad(true);
-                  setViewMode('all');
-                }}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasActivatedShowAll(true);
+                        setViewMode('all');
+                      }}
                 className={`px-3 py-1.5 text-sm rounded-md ${viewMode === 'all' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
                 Show All
@@ -326,7 +340,7 @@ export default function DUPATemplatesPage() {
               </label>
               <input
                 type="text"
-                placeholder="Pay item number or description..."
+                placeholder="Pay item, description, part, or category..."
                 value={searchTerm}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -351,7 +365,7 @@ export default function DUPATemplatesPage() {
                 suppressHydrationWarning
               >
                 <option value="">All Parts</option>
-                {parts.sort().map((part) => (
+                {parts.map((part) => (
                   <option key={part} value={part}>
                     {part}
                   </option>
@@ -370,7 +384,7 @@ export default function DUPATemplatesPage() {
                 suppressHydrationWarning
               >
                 <option value="">All Categories</option>
-                {categories.sort().map((cat) => (
+                {categories.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
@@ -425,10 +439,10 @@ export default function DUPATemplatesPage() {
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
             <div className="text-gray-500">Loading templates...</div>
           </div>
-        ) : !hasRequestedLoad && !searchTerm.trim() ? (
+        ) : viewMode === 'all' && !hasActivatedShowAll && !searchTerm.trim() && !partFilter && !categoryFilter && statusFilter === 'all' && favoriteFilter === 'all' ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <div className="text-gray-700 font-medium">No templates loaded by default</div>
-            <p className="text-sm text-gray-500 mt-1">Use search, or click Common Templates / Show All to load records.</p>
+            <div className="text-gray-700 font-medium">Show All is not loaded by default</div>
+            <p className="text-sm text-gray-500 mt-1">Use search or filters, or keep viewing Common Templates for the curated default list.</p>
           </div>
         ) : (
           <>
@@ -443,31 +457,35 @@ export default function DUPATemplatesPage() {
                 <table className="w-full table-fixed divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Pay Item
+                      <th className="w-36 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('payItemNumber')}
+                          className="inline-flex items-center gap-1 text-left hover:text-gray-700"
+                          title={`Sort pay items ${sortBy === 'payItemNumber' && payItemSortOrder === 'asc' ? 'descending' : 'ascending'}`}
+                        >
+                          <span>Pay Item</span>
+                          <span className="text-[10px]">{sortBy === 'payItemNumber' ? (payItemSortOrder === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
                       </th>
-                      <th className="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Description
                       </th>
                       <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Unit
                       </th>
                       <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Part
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('part')}
+                          className="inline-flex items-center gap-1 text-left hover:text-gray-700"
+                          title={`Sort parts ${sortBy === 'part' && payItemSortOrder === 'asc' ? 'descending' : 'ascending'}`}
+                        >
+                          <span>Part</span>
+                          <span className="text-[10px]">{sortBy === 'part' ? (payItemSortOrder === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
                       </th>
-                      <th className="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Category
-                      </th>
-                      <th className="w-28 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Entries
-                      </th>
-                      <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Status
-                      </th>
-                      <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Favorite
-                      </th>
-                      <th className="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Actions
                       </th>
                     </tr>
@@ -475,7 +493,7 @@ export default function DUPATemplatesPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {templates.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-3 py-12 text-center text-gray-500">
+                        <td colSpan={5} className="px-3 py-12 text-center text-gray-500">
                           No templates found. Create your first template to get started.
                         </td>
                       </tr>
@@ -486,9 +504,11 @@ export default function DUPATemplatesPage() {
                             <div className="font-medium text-gray-900 text-sm">
                               {template.payItemNumber}
                             </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                            </div>
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="text-sm text-gray-900 truncate">
+                          <td className="px-3 py-3 align-top">
+                            <div className="text-sm leading-5 text-gray-900 whitespace-normal break-words">
                               {template.payItemDescription}
                             </div>
                           </td>
@@ -498,66 +518,60 @@ export default function DUPATemplatesPage() {
                           <td className="px-3 py-3 text-sm text-gray-500 truncate">
                             {template.part || '-'}
                           </td>
-                          <td className="px-3 py-3 text-sm text-gray-500 truncate">
-                            {template.category || '-'}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">
-                            L: {template.laborTemplate.length} | 
-                            E: {template.equipmentTemplate.length} | 
-                            M: {template.materialTemplate.length}
-                          </td>
-                          <td className="px-3 py-3">
-                            <button
-                              onClick={() => toggleActive(template)}
-                              className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                template.isActive
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}
-                            >
-                              {template.isActive ? 'Active' : 'Inactive'}
-                            </button>
-                          </td>
-                          <td className="px-3 py-3">
-                            {template.isPinnedCommon ? (
-                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                                ★ Favorite
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-sm font-medium">
-                            <div className="flex flex-wrap gap-2">
+                          <td className="px-3 py-3 text-sm font-medium align-top">
+                            <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                               <Link
                                 href={`/dupa-templates/${template._id}`}
-                                className="text-blue-600 hover:text-blue-900"
+                                title="View"
+                                aria-label="View template"
+                                className={`${actionButtonClass} hover:text-blue-700`}
                               >
-                                View
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
                               </Link>
                               <Link
                                 href={`/dupa-templates/${template._id}/edit`}
-                                className="text-indigo-600 hover:text-indigo-900"
+                                title="Edit"
+                                aria-label="Edit template"
+                                className={`${actionButtonClass} hover:text-indigo-700`}
                               >
-                                Edit
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
                               </Link>
                               <button
-                                onClick={() => openInstantiateModal(template)}
-                                className="text-green-600 hover:text-green-900"
+                                onClick={() => toggleFavorite(template)}
+                                title={template.isPinnedCommon ? 'Unfavorite' : 'Favorite'}
+                                aria-label={template.isPinnedCommon ? 'Unfavorite template' : 'Favorite template'}
+                                className={`${actionButtonClass} ${template.isPinnedCommon ? 'text-amber-700 hover:text-amber-900' : 'hover:text-amber-700'}`}
                               >
-                                Instantiate
+                                <svg className="h-4 w-4" fill={template.isPinnedCommon ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.45 4.462a1 1 0 00.95.69h4.69c.969 0 1.371 1.24.588 1.81l-3.794 2.757a1 1 0 00-.364 1.118l1.45 4.462c.3.921-.755 1.688-1.539 1.118l-3.794-2.757a1 1 0 00-1.176 0l-3.794 2.757c-.783.57-1.838-.197-1.539-1.118l1.45-4.462a1 1 0 00-.364-1.118L2.98 9.889c-.783-.57-.38-1.81.588-1.81h4.69a1 1 0 00.95-.69l1.45-4.462z" />
+                                </svg>
                               </button>
                               <button
-                                onClick={() => toggleFavorite(template)}
-                                className={template.isPinnedCommon ? 'text-amber-700 hover:text-amber-900' : 'text-amber-600 hover:text-amber-800'}
+                                onClick={() => toggleActive(template)}
+                                title={template.isActive ? 'Set inactive' : 'Set active'}
+                                aria-label={template.isActive ? 'Set template inactive' : 'Set template active'}
+                                className={`${actionButtonClass} ${template.isActive ? 'text-green-700 hover:text-green-800' : 'text-gray-500 hover:text-gray-700'}`}
                               >
-                                {template.isPinnedCommon ? '★ Unfavorite' : '☆ Favorite'}
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v9m0 0a4 4 0 104 4" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7.5a7 7 0 1010.73 5.88" />
+                                </svg>
                               </button>
                               <button
                                 onClick={() => handleDelete(template)}
-                                className="text-red-600 hover:text-red-900"
+                                title="Delete"
+                                aria-label="Delete template"
+                                className={`${actionButtonClass} hover:text-red-700`}
                               >
-                                Delete
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" />
+                                </svg>
                               </button>
                             </div>
                           </td>
@@ -584,73 +598,6 @@ export default function DUPATemplatesPage() {
         )}
       </div>
 
-      {/* Instantiate Modal */}
-      {showInstantiateModal && selectedTemplate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Instantiate Template
-            </h3>
-            
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">
-                Template: <strong>{selectedTemplate.payItemNumber}</strong>
-              </p>
-              <p className="text-sm text-gray-600">
-                {selectedTemplate.payItemDescription}
-              </p>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Location <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={instantiateLocation}
-                onChange={(e) => setInstantiateLocation(e.target.value)}
-                placeholder="e.g., Malaybalay City, Bukidnon"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Must match a location in Labor Rates database
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={useEvaluated}
-                  onChange={(e) => setUseEvaluated(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">
-                  Use Evaluated (instead of Submitted)
-                </span>
-              </label>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowInstantiateModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                disabled={instantiating}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleInstantiate}
-                disabled={instantiating || !instantiateLocation.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {instantiating ? 'Creating...' : 'Instantiate'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Generate Defaults Modal */}
       {showGenerateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -670,7 +617,7 @@ export default function DUPATemplatesPage() {
                 </ul>
                 <p className="mt-2"><strong>Equipment:</strong> Blank (user will specify)</p>
                 <p><strong>Materials:</strong> Blank (user will specify)</p>
-                <p className="mt-2"><strong>Add-ons:</strong> OCM 15%, CP 10%, VAT 12%, Minor Tools 10%</p>
+                <p className="mt-2"><strong>Add-ons:</strong> OCM 15%, CP 10%, VAT 12%, Minor Tools 10%, Consumables disabled</p>
               </div>
             </div>
 

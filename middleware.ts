@@ -49,13 +49,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (pathname.startsWith('/master') || pathname.startsWith('/catalog')) {
+  if (pathname.startsWith('/master')) {
     if (!MASTER_ADMIN_ROLES.some(role => roles.includes(role))) {
       return NextResponse.redirect(new URL('/forbidden', request.url));
     }
   }
 
-  if (pathname.startsWith('/api/master') || pathname.startsWith('/api/catalog')) {
+  if (pathname.startsWith('/api/master')) {
     if (!MASTER_ADMIN_ROLES.some(role => roles.includes(role))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

@@ -22,6 +22,9 @@ interface CalculateEstimateOptions {
   laborVersion?: string;
   cmpdVersion?: string;  // When provided, will lookup MaterialPrice for CMPD or canvass prices
   equipmentRateEdition?: string;
+  equipmentRateMode?: 'fixed' | 'variable_fuel_lube';
+  fuelPricePerLiter?: number;
+  lubePricePerLiter?: number;
   ocmPercentage?: number;  // Optional - will auto-calculate from project cost if not provided
   cpPercentage?: number;   // Optional - will auto-calculate from project cost if not provided
   vatPercentage?: number;  // Optional - defaults to 12%
@@ -151,17 +154,29 @@ export async function calculateEstimate(
     }
 
     if (options.equipmentRateEdition) {
+      const rateMode = options.equipmentRateMode || 'fixed';
       const equipmentRates = await EquipmentRate.find({
         equipmentId: { $in: Array.from(equipmentIds) },
         edition: options.equipmentRateEdition.trim().toUpperCase(),
-        mode: 'fixed',
+        mode: rateMode,
         isActive: true,
       })
-        .select('equipmentId ratePerHour')
+        .select('equipmentId ratePerHour dryRate fuel lube')
         .lean();
 
       for (const rate of equipmentRates) {
-        equipmentRateMap.set(String(rate.equipmentId), Number(rate.ratePerHour || 0));
+        let resolvedRate = Number(rate.ratePerHour || 0);
+
+        if (rateMode === 'variable_fuel_lube') {
+          const dryRate = Number(rate.dryRate || 0);
+          const fuelAvg = Number(rate.fuel?.avgLph || 0);
+          const lubeAvg = Number(rate.lube?.avgLph || 0);
+          const fuelPricePerLiter = Number(options.fuelPricePerLiter || 0);
+          const lubePricePerLiter = Number(options.lubePricePerLiter || 0);
+          resolvedRate = dryRate + (fuelAvg * fuelPricePerLiter) + (lubeAvg * lubePricePerLiter);
+        }
+
+        equipmentRateMap.set(String(rate.equipmentId), resolvedRate);
       }
     }
   }
@@ -216,6 +231,7 @@ export async function calculateEstimate(
         payItemNumber: payItemNumber,
         payItemDescription: boqLine.description || 'No DUPA template found',
         unit: boqLine.unit || 'LS',
+        outputPerHour: 0,
         quantity: boqLine.quantity || 0,
         part: boqLine.part || '',
         dupaNotFound: true,
@@ -223,6 +239,7 @@ export async function calculateEstimate(
         equipmentCost: 0,
         materialCost: 0,
         minorToolsCost: 0,
+        consumablesCost: 0,
         directCost: 0,
         ocmCost: 0,
         cpCost: 0,
@@ -273,6 +290,7 @@ export async function calculateEstimate(
       payItemNumber: payItemNumber,
       payItemDescription: template.payItemDescription,
       unit: template.unitOfMeasurement,
+      outputPerHour: Number(template.outputPerHour || 0),
       quantity,
       part: template.part || boqLine.part || '',
       dupaTemplateId: template._id,
@@ -490,15 +508,43 @@ async function computeLineItemDirectCosts(
       requiresCanvass
     });
   }
+
+  const includeConsumables = dupaTemplate.includeConsumables === true;
+  const consumablesPercentage = typeof dupaTemplate.consumablesPercentage === 'number'
+    ? dupaTemplate.consumablesPercentage
+    : 10;
+  const consumablesCost = includeConsumables
+    ? materialCost * (consumablesPercentage / 100)
+    : 0;
+
+  if (includeConsumables) {
+    materialCost += consumablesCost;
+    materialItems.push({
+      materialCode: '',
+      description: `Consumables (${consumablesPercentage}% of Materials Cost)`,
+      unit: 'LS',
+      quantity: 1,
+      basePrice: consumablesCost,
+      haulingCost: 0,
+      unitCost: consumablesCost,
+      amount: consumablesCost,
+      priceSource: 'canvass' as const,
+      requiresCanvass: false,
+    });
+  }
   
   // Direct cost
-  const directCost = laborCost + equipmentCost + materialCost;
+  const outputPerHour = Number(dupaTemplate.outputPerHour || 0) > 0 ? Number(dupaTemplate.outputPerHour) : 0;
+  const directLaborEquipmentCost = laborCost + equipmentCost;
+  const directUnitCost = outputPerHour > 0 ? directLaborEquipmentCost / outputPerHour : 0;
+  const directCost = directUnitCost + materialCost;
   
   return {
     laborCost,
     equipmentCost,
     materialCost,
     minorToolsCost,
+    consumablesCost,
     directCost,
     laborItems,
     equipmentItems,

@@ -93,8 +93,8 @@ function computeAuthoritativeTotals(input: {
   const laborSubmitted = (input.laborItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
   const equipmentSubmitted = (input.equipmentItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
   const directCostSubmitted = laborSubmitted + equipmentSubmitted;
-  const outputSubmitted = input.outputPerHour > 0 ? input.outputPerHour : 1;
-  const directUnitCostSubmitted = directCostSubmitted / outputSubmitted;
+  const outputSubmitted = input.outputPerHour > 0 ? input.outputPerHour : 0;
+  const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
   const materialsSubmitted = (input.materialItems || []).reduce((sum, row) => sum + asNumber(row.amount, 0), 0);
   const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
   const ocmValue = directUnitPlusMaterialsSubmitted * (input.ocmPercent / 100);
@@ -152,7 +152,7 @@ export async function PUT(
       payItemDescription: String(item?.payItemDescription || ''),
       part: String(item?.part || ''),
       unitOfMeasurement: String(item?.unitOfMeasurement || ''),
-      outputPerHour: asNumber(item?.outputPerHour, 1),
+      outputPerHour: asNumber(item?.outputPerHour, 0),
       quantity: asNumber(item?.quantity, 0),
       laborItems: normalizeLaborItems(item?.laborItems),
       equipmentItems: normalizeEquipmentItems(item?.equipmentItems),
@@ -262,7 +262,7 @@ export async function PUT(
 
       baseSnapshot = {
         lineId,
-        outputPerHour: 1,
+        outputPerHour: asNumber(current.outputPerHour, 0),
         laborItems: current.laborItems,
         equipmentItems: current.equipmentItems,
         materialItems: current.materialItems,
@@ -284,6 +284,7 @@ export async function PUT(
         payItemDescription: String(payload.payItemDescription || current.payItemDescription || ''),
         unit: String(current.unit || payload.unitOfMeasurement || ''),
         part: String(payload.part || current.part || ''),
+        outputPerHour: payload.outputPerHour,
         quantity,
         laborItems: payload.laborItems,
         equipmentItems: payload.equipmentItems,
@@ -460,6 +461,7 @@ export async function DELETE(
         payItemDescription: String(current.payItemDescription || adjustment.payItemDescription || ''),
         unit: String(current.unit || adjustment.unitOfMeasurement || ''),
         part: String(current.part || adjustment.part || ''),
+        outputPerHour: asNumber(base.outputPerHour, current.outputPerHour),
         laborItems: Array.isArray(base.laborItems) ? base.laborItems : current.laborItems,
         equipmentItems: Array.isArray(base.equipmentItems) ? base.equipmentItems : current.equipmentItems,
         materialItems: Array.isArray(base.materialItems) ? base.materialItems : current.materialItems,

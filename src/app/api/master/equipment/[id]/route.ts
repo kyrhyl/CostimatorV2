@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import Equipment from '@/models/Equipment';
+import EquipmentRate from '@/models/EquipmentRate';
 import { z } from 'zod';
 
 // ============================================================================
@@ -21,6 +22,10 @@ const UpdateEquipmentSchema = z.object({
   flywheelHorsepower: z.number().min(0).optional(),
   fuelConsumptionAvgLph: z.number().min(0).optional(),
   lubeConsumptionAvgLph: z.number().min(0).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  rentalRate: z.number().min(0).optional(),
+  rateEdition: z.string().optional(),
+  syncRateEntries: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -39,6 +44,61 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     }
     return { success: false, error: 'Validation failed' };
   }
+}
+
+async function syncEquipmentRates(
+  equipmentId: string,
+  rateEdition: string,
+  equipmentData: {
+    hourlyRate?: number;
+    fuelConsumptionAvgLph?: number;
+    lubeConsumptionAvgLph?: number;
+  }
+) {
+  const edition = rateEdition.trim().toUpperCase();
+  if (!edition) {
+    return;
+  }
+
+  const hourlyRate = Number(equipmentData.hourlyRate || 0);
+  const fuelAvg = Number(equipmentData.fuelConsumptionAvgLph || 0);
+  const lubeAvg = Number(equipmentData.lubeConsumptionAvgLph || 0);
+
+  await EquipmentRate.updateOne(
+    { equipmentId, edition, mode: 'fixed' },
+    {
+      $set: {
+        source: 'manual',
+        ratePerHour: hourlyRate,
+        dryRate: hourlyRate,
+        isActive: true,
+      },
+    },
+    { upsert: true }
+  );
+
+  await EquipmentRate.updateOne(
+    { equipmentId, edition, mode: 'variable_fuel_lube' },
+    {
+      $set: {
+        source: 'manual',
+        ratePerHour: hourlyRate,
+        dryRate: hourlyRate,
+        fuel: {
+          avgLph: fuelAvg,
+          unitCostPerLiter: 0,
+          costPerHour: 0,
+        },
+        lube: {
+          avgLph: lubeAvg,
+          unitCostPerLiter: 0,
+          costPerHour: 0,
+        },
+        isActive: true,
+      },
+    },
+    { upsert: true }
+  );
 }
 
 // ============================================================================
@@ -113,7 +173,8 @@ export async function PATCH(
       );
     }
     
-    const updateData = validation.data!;
+    const validatedData = validation.data!;
+    const { rateEdition, syncRateEntries, ...updateData } = validatedData;
     
     // Check if nothing to update
     if (Object.keys(updateData).length === 0) {
@@ -153,6 +214,14 @@ export async function PATCH(
         { success: false, error: 'Equipment not found' },
         { status: 404 }
       );
+    }
+
+    if (syncRateEntries && rateEdition) {
+      await syncEquipmentRates(id, rateEdition, {
+        hourlyRate: updateData.hourlyRate ?? Number((equipment as any).hourlyRate || 0),
+        fuelConsumptionAvgLph: updateData.fuelConsumptionAvgLph ?? Number((equipment as any).fuelConsumptionAvgLph || 0),
+        lubeConsumptionAvgLph: updateData.lubeConsumptionAvgLph ?? Number((equipment as any).lubeConsumptionAvgLph || 0),
+      });
     }
     
     return NextResponse.json({

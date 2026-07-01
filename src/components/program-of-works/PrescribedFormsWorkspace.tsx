@@ -26,6 +26,9 @@ export default function PrescribedFormsWorkspace({ projectId, mode, estimateId }
   const [activeTab, setActiveTab] = useState<FormTab>('pow');
   const [printBundlesReady, setPrintBundlesReady] = useState(false);
   const [selectedDupaPrintKey, setSelectedDupaPrintKey] = useState<string | null>(null);
+  const backToPowHref = estimateId
+    ? `/projects/${projectId}/program-of-works?estimateId=${estimateId}&section=overview`
+    : `/projects/${projectId}/program-of-works`;
 
   const { data, loading, error, refetch } = usePrescribedFormsData(projectId, { mode, estimateId });
 
@@ -78,10 +81,10 @@ export default function PrescribedFormsWorkspace({ projectId, mode, estimateId }
               Retry
             </button>
             <Link
-              href={`/projects/${projectId}`}
+              href={backToPowHref}
               className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Back to Project
+              Back to Program of Works
             </Link>
           </div>
         </div>
@@ -94,8 +97,8 @@ export default function PrescribedFormsWorkspace({ projectId, mode, estimateId }
       <div className={`${printStyles.noPrint} print:hidden bg-white border-b border-gray-200`} data-print-hide="true">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Link href={`/projects/${projectId}`} className="text-sm text-blue-600 hover:text-blue-800">
-              ← Back to Project
+            <Link href={backToPowHref} className="text-sm text-blue-600 hover:text-blue-800">
+              ← Back to Program of Works
             </Link>
             <h1 className="text-2xl font-bold text-gray-900">Prescribed Forms Packet</h1>
             <p className="text-sm text-gray-600">POW and ABC in landscape, DUPA in portrait</p>

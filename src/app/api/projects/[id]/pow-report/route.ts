@@ -7,7 +7,7 @@ import CostEstimate from '@/models/CostEstimate';
 import PayItem from '@/models/PayItem';
 import DUPATemplate from '@/models/DUPATemplate';
 import mongoose from 'mongoose';
-import { getDivisionForPart, normalizePart, PART_DESCRIPTIONS, PART_ORDER } from '@/lib/utils/dpwh-constants';
+import { getDivisionForPart, getPartKey, normalizePart, PART_DESCRIPTIONS, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { computePercentOfProjectCost } from '@/lib/utils/pow-math';
 import { normalizePowMode } from '@/lib/utils/dupa-identity';
 
@@ -329,21 +329,7 @@ function groupItemsByPart(
   console.log('Processing', boqItems.length, 'BOQ items...');
   
   boqItems.forEach((item, index) => {
-    let part: string;
-    
-    if (item.part) {
-      part = normalizePart(item.part);
-      console.log(`Item ${index}: ${item.payItemNumber} has part:`, item.part);
-    } else if (item.templateId && (item.templateId as any)?.part) {
-      part = normalizePart((item.templateId as any).part);
-      console.log(`Item ${index}: ${item.payItemNumber} template has part:`, (item.templateId as any).part);
-    } else if (item.category) {
-      part = normalizePart(item.category);
-      console.log(`Item ${index}: ${item.payItemNumber} has category:`, item.category);
-    } else {
-      part = 'PART C'; // default
-      console.log(`Item ${index}: ${item.payItemNumber} - no part found, defaulting to PART C`);
-    }
+    const part = normalizePart(item.part || (item.templateId && (item.templateId as any)?.part) || '') || 'UNASSIGNED PART';
     
     const partKey = part;
 
@@ -383,8 +369,8 @@ function groupItemsByPart(
       percent: computePercentOfProjectCost(data.asSubmitted, totalProjectCost)
     }))
     .sort((a, b) => {
-      const aOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-      const bOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+      const aOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+      const bOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
       if (aOrder !== -1 && bOrder !== -1) return aOrder - bOrder;
       return a.part.localeCompare(b.part);
     });
@@ -422,17 +408,7 @@ function groupItemsByPartDetailed(
   const partMap = new Map<string, { items: DetailedLineItem[]; partTotal: number }>();
 
   boqItems.forEach((item) => {
-    let part: string;
-    
-    if (item.part) {
-      part = normalizePart(item.part);
-    } else if (item.templateId && (item.templateId as any)?.part) {
-      part = normalizePart((item.templateId as any).part);
-    } else if (item.category) {
-      part = normalizePart(item.category);
-    } else {
-      part = 'PART C';
-    }
+    const part = normalizePart(item.part || (item.templateId && (item.templateId as any)?.part) || '') || 'UNASSIGNED PART';
     
     const partKey = part;
 
@@ -481,8 +457,8 @@ function groupItemsByPartDetailed(
       partPercent: computePercentOfProjectCost(data.partTotal, totalProjectCost)
     }))
     .sort((a, b) => {
-      const aOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-      const bOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+      const aOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+      const bOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
       if (aOrder !== -1 && bOrder !== -1) return aOrder - bOrder;
       return a.part.localeCompare(b.part);
     });
@@ -530,17 +506,7 @@ function groupItemsByComponentBreakdown(
   const partMap = new Map<string, { items: ComponentBreakdownItem[]; totals: ComponentBreakdownPart['totals'] }>();
 
   boqItems.forEach((item) => {
-    let part: string;
-
-    if (item.part) {
-      part = normalizePart(item.part);
-    } else if (item.templateId && (item.templateId as any)?.part) {
-      part = normalizePart((item.templateId as any).part);
-    } else if (item.category) {
-      part = normalizePart(item.category);
-    } else {
-      part = 'PART C';
-    }
+    const part = normalizePart(item.part || (item.templateId && (item.templateId as any)?.part) || '') || 'UNASSIGNED PART';
 
     const partKey = part;
 
@@ -598,8 +564,8 @@ function groupItemsByComponentBreakdown(
       totals: data.totals
     }))
     .sort((a, b) => {
-      const aOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-      const bOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+      const aOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+      const bOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
       if (aOrder !== -1 && bOrder !== -1) return aOrder - bOrder;
       return a.part.localeCompare(b.part);
     });

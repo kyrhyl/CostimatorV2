@@ -34,6 +34,8 @@ async function checkPayItems() {
     samples.forEach((item, idx) => {
       console.log(`${idx + 1}. ${item.payItemNumber} - ${item.description}`);
       console.log(`   Unit: ${item.unit}, Part: ${item.part || 'N/A'}, Active: ${item.isActive}`);
+      if (item.subCategory) console.log(`   SubCategory: ${item.subCategory}`);
+      if (item.overriddenFields?.length > 0) console.log(`   Overrides: ${item.overriddenFields.join(', ')}`);
     });
 
     // Show unique parts

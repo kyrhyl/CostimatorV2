@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DupaItemBreakdown, DupaReportData } from '@/types/dupa';
+import { getPartKey, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { FormDUPAPage } from '../forms/FormDUPAPage';
 
 interface DupaWorkspaceTabProps {
@@ -31,6 +32,19 @@ const getItemKey = (item: DupaReportData['items'][number], index: number) =>
   item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
 
 const safe = (value: number) => (Number.isFinite(value) ? value : 0);
+
+const comparePartLabels = (left: string, right: string) => {
+  const leftOrder = PART_ORDER.indexOf(getPartKey(left).replace('PART ', ''));
+  const rightOrder = PART_ORDER.indexOf(getPartKey(right).replace('PART ', ''));
+
+  if (leftOrder !== rightOrder) {
+    if (leftOrder === -1) return 1;
+    if (rightOrder === -1) return -1;
+    return leftOrder - rightOrder;
+  }
+
+  return left.localeCompare(right, undefined, { sensitivity: 'base' });
+};
 
 const LABOR_KEYS: Array<{ label: string; field: string }> = [
   { label: 'Foreman', field: 'foreman' },
@@ -79,7 +93,7 @@ function recomputeItem(item: EditableItem): EditableItem {
   const laborSubmitted = laborItems.reduce((sum, row) => sum + row.amount, 0);
   const equipmentSubmitted = equipmentItems.reduce((sum, row) => sum + row.amount, 0);
   const directCostSubmitted = laborSubmitted + equipmentSubmitted;
-  const outputSubmitted = item.outputPerHour > 0 ? item.outputPerHour : 1;
+  const outputSubmitted = item.outputPerHour > 0 ? item.outputPerHour : 0;
   const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
   const materialsSubmitted = materialItems.reduce((sum, row) => sum + row.amount, 0);
   const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
@@ -149,7 +163,10 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
     [data.items],
   );
 
-  const partOptions = useMemo(() => Array.from(new Set(keyedItems.map((entry) => entry.item.part))).sort(), [keyedItems]);
+  const partOptions = useMemo(
+    () => Array.from(new Set(keyedItems.map((entry) => entry.item.part))).sort(comparePartLabels),
+    [keyedItems],
+  );
 
   const filteredItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -262,7 +279,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
         materialCode: selected?.materialCode || row.materialCode,
         description: selected?.description || row.description,
         unit: selected?.unit || row.unit,
-        unitCost: selected?.basePrice !== undefined ? selected.basePrice : safe(row.unitCost),
+        unitCost: safe(row.unitCost),
       };
     });
 
@@ -315,7 +332,11 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
     }
   };
 
-  const selectedItem = editing && draft ? draft : selectedEntry?.item;
+  const selectedItem = draft || selectedEntry?.item;
+  const showActionColumn = editing;
+  const directCostSubmitted = safe(selectedItem?.totals.directCostSubmitted || 0);
+  const outputRate = safe(selectedItem?.totals.outputSubmitted || selectedItem?.outputPerHour || 0);
+  const directUnitCostOnly = safe(selectedItem?.totals.directUnitCostSubmitted || 0);
   const directUnitSubtotal = safe(selectedItem?.totals.directUnitPlusMaterialsSubmitted || 0);
   const ocmPercent = safe(selectedItem?.totals.ocmPercent || 0);
   const cpPercent = safe(selectedItem?.totals.cpPercent || 0);
@@ -323,18 +344,9 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
   const indirectSubtotal = safe(selectedItem?.totals.ocmValue || 0) + safe(selectedItem?.totals.cpValue || 0) + safe(selectedItem?.totals.vatValue || 0);
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">DUPA Workspace Editor</h3>
-            <p className="text-xs text-slate-600">Editor-first layout with separate DPWH form preview.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="mx-auto max-w-[1280px] space-y-2">
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="rounded-lg border border-slate-200 bg-white p-2.5">
           <div className="space-y-2">
             <input
               type="text"
@@ -354,7 +366,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
               Adjusted only
             </label>
           </div>
-          <ul className="mt-3 max-h-[65vh] space-y-1 overflow-auto">
+          <ul className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
             {filteredItems.map((entry) => {
               const selected = selectedKey === entry.key;
               const adjusted = adjustedKeys.includes(entry.key);
@@ -367,10 +379,11 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                       setEditing(false);
                       setDirty(false);
                     }}
-                    className={`w-full rounded-md border px-2 py-2 text-left ${selected ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                    className={`w-full rounded-md border px-2 py-1.5 text-left ${selected ? 'border-blue-300 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
                   >
-                    <p className="text-xs font-semibold text-slate-800">{entry.item.part} - {entry.item.payItemNumber}</p>
-                    <p className="text-xs text-slate-600 line-clamp-2">{entry.item.payItemDescription}</p>
+                    <p className="text-sm font-semibold text-slate-900">{entry.item.payItemNumber}</p>
+                    <p className="mt-0.5 text-xs text-slate-600 line-clamp-2">{entry.item.payItemDescription}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">{entry.item.part}</p>
                     {adjusted && <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Adjusted</span>}
                   </button>
                 </li>
@@ -379,16 +392,35 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
           </ul>
         </aside>
 
-        <section className="space-y-3 min-w-0">
+        <section className="space-y-2 min-w-0">
           {!selectedEntry || !selectedItem ? (
             <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">No DUPA item selected.</div>
           ) : (
             <>
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-2.5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{selectedEntry.item.payItemNumber} - {selectedEntry.item.payItemDescription}</p>
-                    <p className="text-xs text-slate-600">{selectedEntry.item.part} | UOM: {selectedEntry.item.unitOfMeasurement} | Qty: {formatNumber(selectedEntry.item.quantity)}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                      <span>{selectedEntry.item.part}</span>
+                      <span>UOM: {selectedEntry.item.unitOfMeasurement}</span>
+                      <span>Qty: {formatNumber(selectedEntry.item.quantity)}</span>
+                      <span className="inline-flex items-center gap-2">
+                        <span>Output/hr:</span>
+                        {editing ? (
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                            value={selectedItem?.outputPerHour ?? 0}
+                            onChange={(e) => updateDraft((current) => ({ ...current, outputPerHour: Number(e.target.value || 0) }))}
+                          />
+                        ) : (
+                          <span className="font-medium text-slate-700">{formatNumber(selectedItem?.outputPerHour ?? selectedEntry.item.outputPerHour)}</span>
+                        )}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {!readOnly && !editing && (
@@ -460,25 +492,33 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                 {editing && <p className="mt-2 text-xs text-amber-700">{dirty ? 'Unsaved changes' : 'Edit values below, then save.'}</p>}
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">Labor</p>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+                  <p className="mb-1.5 text-sm font-semibold text-slate-900">Labor</p>
                   <div className="overflow-auto">
                     <table className="w-full min-w-[640px] table-fixed text-sm">
+                      <colgroup>
+                        <col style={{ width: '40%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: showActionColumn ? '14%' : '20%' }} />
+                        {showActionColumn ? <col style={{ width: '6%' }} /> : null}
+                      </colgroup>
                       <thead className="text-xs text-slate-600">
                         <tr>
-                          <th className="w-[36%] text-left pb-2">Designation</th>
-                          <th className="w-[12%] text-right pb-2">Persons</th>
-                          <th className="w-[12%] text-right pb-2">Hours</th>
-                          <th className="w-[16%] text-right pb-2">Rate</th>
-                          <th className="w-[16%] text-right pb-2">Amount</th>
-                          <th className="w-[8%] text-center pb-2">Action</th>
+                          <th className="text-left pb-2">Designation</th>
+                          <th className="text-right pb-2">Persons</th>
+                          <th className="text-right pb-2">Hours</th>
+                          <th className="text-right pb-2">Rate</th>
+                          <th className="text-right pb-2">Amount</th>
+                          {showActionColumn ? <th className="text-center pb-2">Action</th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {selectedItem.laborItems.map((row, idx) => (
                           <tr key={`labor-${idx}`} className="border-t border-slate-100">
-                            <td className="py-1.5">
+                            <td className="py-1">
                               {editing ? (
                                 <input
                                   list="dupa-labor-suggestions-modern"
@@ -497,11 +537,11 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                                 />
                               ) : row.designation}
                             </td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfPersons} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfPersons: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfPersons)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfHours)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.hourlyRate)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.amount)}</td>
-                            <td className="py-1.5 text-center">{editing && selectedItem.laborItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, laborItems: current.laborItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfPersons} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfPersons: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfPersons)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfHours)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, laborItems: current.laborItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.hourlyRate)}</td>
+                            <td className="py-1 text-right tabular-nums">{formatCurrency(row.amount)}</td>
+                            {showActionColumn ? <td className="py-1 text-center">{selectedItem.laborItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, laborItems: current.laborItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td> : null}
                           </tr>
                         ))}
                       </tbody>
@@ -513,7 +553,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
                             {formatCurrency(selectedItem.totals.laborSubmitted)}
                           </td>
-                          <td className="py-2" />
+                          {showActionColumn ? <td className="py-2" /> : null}
                         </tr>
                       </tfoot>
                     </table>
@@ -521,29 +561,37 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                   {editing && <button type="button" className="mt-2 text-xs font-semibold text-blue-700" onClick={() => updateDraft((current) => ({ ...current, laborItems: [...current.laborItems, { designation: '', noOfPersons: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }))}>+ Add labor row</button>}
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">Equipment</p>
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+                  <p className="mb-1.5 text-sm font-semibold text-slate-900">Equipment</p>
                   <div className="overflow-auto">
                     <table className="w-full min-w-[640px] table-fixed text-sm">
+                      <colgroup>
+                        <col style={{ width: '40%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: showActionColumn ? '14%' : '20%' }} />
+                        {showActionColumn ? <col style={{ width: '6%' }} /> : null}
+                      </colgroup>
                       <thead className="text-xs text-slate-600">
                         <tr>
-                          <th className="w-[36%] text-left pb-2">Description</th>
-                          <th className="w-[12%] text-right pb-2">Units</th>
-                          <th className="w-[12%] text-right pb-2">Hours</th>
-                          <th className="w-[16%] text-right pb-2">Rate</th>
-                          <th className="w-[16%] text-right pb-2">Amount</th>
-                          <th className="w-[8%] text-center pb-2">Action</th>
+                          <th className="text-left pb-2">Description</th>
+                          <th className="text-right pb-2">Units</th>
+                          <th className="text-right pb-2">Hours</th>
+                          <th className="text-right pb-2">Rate</th>
+                          <th className="text-right pb-2">Amount</th>
+                          {showActionColumn ? <th className="text-center pb-2">Action</th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {selectedItem.equipmentItems.map((row, idx) => (
                           <tr key={`equipment-${idx}`} className="border-t border-slate-100">
-                            <td className="py-1.5">{editing ? <input list="dupa-equipment-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfUnits} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfUnits: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfUnits)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfHours)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.hourlyRate)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.amount)}</td>
-                            <td className="py-1.5 text-center">{editing && selectedItem.equipmentItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td>
+                            <td className="py-1">{editing ? <input list="dupa-equipment-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfUnits} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfUnits: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfUnits)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfHours)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.hourlyRate)}</td>
+                            <td className="py-1 text-right tabular-nums">{formatCurrency(row.amount)}</td>
+                            {showActionColumn ? <td className="py-1 text-center">{selectedItem.equipmentItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td> : null}
                           </tr>
                         ))}
                       </tbody>
@@ -555,7 +603,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
                             {formatCurrency(selectedItem.totals.equipmentSubmitted)}
                           </td>
-                          <td className="py-2" />
+                          {showActionColumn ? <td className="py-2" /> : null}
                         </tr>
                       </tfoot>
                     </table>
@@ -563,29 +611,37 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                   {editing && <button type="button" className="mt-2 text-xs font-semibold text-blue-700" onClick={() => updateDraft((current) => ({ ...current, equipmentItems: [...current.equipmentItems, { equipmentId: '', description: '', noOfUnits: 0, noOfHours: 0, hourlyRate: 0, amount: 0 }] }))}>+ Add equipment row</button>}
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">Materials</p>
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+                  <p className="mb-1.5 text-sm font-semibold text-slate-900">Materials</p>
                   <div className="overflow-auto">
                     <table className="w-full min-w-[640px] table-fixed text-sm">
+                      <colgroup>
+                        <col style={{ width: '40%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: showActionColumn ? '14%' : '20%' }} />
+                        {showActionColumn ? <col style={{ width: '6%' }} /> : null}
+                      </colgroup>
                       <thead className="text-xs text-slate-600">
                         <tr>
-                          <th className="w-[36%] text-left pb-2">Description</th>
-                          <th className="w-[16%] text-left pb-2">Unit</th>
-                          <th className="w-[12%] text-right pb-2">Qty</th>
-                          <th className="w-[16%] text-right pb-2">Unit Cost</th>
-                          <th className="w-[12%] text-right pb-2">Amount</th>
-                          <th className="w-[8%] text-center pb-2">Action</th>
+                          <th className="text-left pb-2">Description</th>
+                          <th className="text-right pb-2">Unit</th>
+                          <th className="text-right pb-2">Qty</th>
+                          <th className="text-right pb-2">Unit Cost</th>
+                          <th className="text-right pb-2">Amount</th>
+                          {showActionColumn ? <th className="text-center pb-2">Action</th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {selectedItem.materialItems.map((row, idx) => (
                           <tr key={`material-${idx}`} className="border-t border-slate-100">
-                            <td className="py-1.5">{editing ? <input list="dupa-material-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
-                            <td className="py-1.5">{editing ? <input className={inputClass} value={row.unit} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unit: e.target.value } : entry) }))} /> : row.unit}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.quantity} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, quantity: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.quantity)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.unitCost} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unitCost: Number(e.target.value || 0) } : entry) }))} /> : formatCurrency(row.unitCost)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.amount)}</td>
-                            <td className="py-1.5 text-center">{editing && selectedItem.materialItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, materialItems: current.materialItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td>
+                            <td className="py-1">{editing ? <input list="dupa-material-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
+                            <td className="py-1 text-right">{editing ? <input className={`${inputClass} text-right`} value={row.unit} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unit: e.target.value } : entry) }))} /> : row.unit}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.quantity} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, quantity: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.quantity)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.unitCost} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unitCost: Number(e.target.value || 0) } : entry) }))} /> : formatCurrency(row.unitCost)}</td>
+                            <td className="py-1 text-right tabular-nums">{formatCurrency(row.amount)}</td>
+                            {showActionColumn ? <td className="py-1 text-center">{selectedItem.materialItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, materialItems: current.materialItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td> : null}
                           </tr>
                         ))}
                       </tbody>
@@ -597,7 +653,7 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           <td className="py-2 text-right text-sm font-semibold tabular-nums text-slate-900">
                             {formatCurrency(selectedItem.totals.materialsSubmitted)}
                           </td>
-                          <td className="py-2" />
+                          {showActionColumn ? <td className="py-2" /> : null}
                         </tr>
                       </tfoot>
                     </table>
@@ -606,23 +662,74 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <p className="mb-2 text-sm font-semibold text-slate-900">Totals</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-                  <div className="rounded border border-slate-200 p-2"><p className="text-xs text-slate-500">Labor</p><p className="font-semibold tabular-nums">{formatCurrency(selectedItem.totals.laborSubmitted)}</p></div>
-                  <div className="rounded border border-slate-200 p-2"><p className="text-xs text-slate-500">Equipment</p><p className="font-semibold tabular-nums">{formatCurrency(selectedItem.totals.equipmentSubmitted)}</p></div>
-                  <div className="rounded border border-slate-200 p-2"><p className="text-xs text-slate-500">Materials</p><p className="font-semibold tabular-nums">{formatCurrency(selectedItem.totals.materialsSubmitted)}</p></div>
-                  <div className="rounded border border-slate-200 bg-slate-50 p-2"><p className="text-xs text-slate-500">Direct Unit Subtotal</p><p className="font-semibold tabular-nums">{formatCurrency(directUnitSubtotal)}</p></div>
-                  <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">Indirect Cost Subtotal</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(indirectSubtotal)}</p></div>
-                  <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">OCM ({formatNumber(ocmPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.ocmValue)}</p></div>
-                  <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">CP ({formatNumber(cpPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.cpValue)}</p></div>
-                  <div className="rounded border border-amber-200 bg-amber-50 p-2"><p className="text-xs text-amber-700">VAT ({formatNumber(vatPercent)}%)</p><p className="font-semibold text-amber-800 tabular-nums">{formatCurrency(selectedItem.totals.vatValue)}</p></div>
-                  <div className="rounded border border-blue-200 bg-blue-50 p-2"><p className="text-xs text-blue-600">Total Unit Cost</p><p className="font-semibold text-blue-800 tabular-nums">{formatCurrency(selectedItem.totals.totalUnitCostSubmitted)}</p></div>
+              <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">Totals</p>
+                  <p className="text-xs text-slate-500">Unit cost stays visible above while editing.</p>
+                </div>
+                <div className="overflow-auto">
+                  <table className="mx-auto w-full max-w-[980px] min-w-[720px] border-collapse text-sm">
+                    <colgroup>
+                      <col style={{ width: '64%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '22%' }} />
+                    </colgroup>
+                    <tbody>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700" colSpan={2}>Labor - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.laborSubmitted)}</td>
+                      </tr>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700" colSpan={2}>Equipment - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.equipmentSubmitted)}</td>
+                      </tr>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700" colSpan={2}>Materials - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.materialsSubmitted)}</td>
+                      </tr>
+                      <tr className="border border-slate-200 bg-slate-50">
+                        <td className="border border-slate-200 px-3 py-1.5 font-semibold text-slate-800" colSpan={2}>Direct Unit Cost - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(directUnitSubtotal)}</td>
+                      </tr>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700">Overhead, Contingencies &amp; Miscellaneous (OCM) - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(ocmPercent)}%</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.ocmValue)}</td>
+                      </tr>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700">Contractor&apos;s Profit (CP) - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(cpPercent)}%</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.cpValue)}</td>
+                      </tr>
+                      <tr className="border border-slate-200">
+                        <td className="border border-slate-200 px-3 py-1.5 font-medium text-slate-700">Value Added Tax (VAT) - As Submitted</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(vatPercent)}%</td>
+                        <td className="border border-slate-200 px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">{formatCurrency(selectedItem.totals.vatValue)}</td>
+                      </tr>
+                      <tr className="border border-amber-200 bg-amber-50">
+                        <td className="border border-amber-200 px-3 py-1.5 font-semibold text-amber-800" colSpan={2}>Indirect Cost Subtotal - As Submitted</td>
+                        <td className="border border-amber-200 px-3 py-1.5 text-right font-semibold tabular-nums text-amber-800">{formatCurrency(indirectSubtotal)}</td>
+                      </tr>
+                      <tr className="border border-blue-300 bg-blue-50">
+                        <td className="border border-blue-300 px-3 py-1.5 text-base font-semibold text-blue-800" colSpan={2}>Total Unit Cost - As Submitted</td>
+                        <td className="border border-blue-300 px-3 py-1.5 text-right text-base font-semibold tabular-nums text-blue-900">{formatCurrency(selectedItem.totals.totalUnitCostSubmitted)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
                 <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                   <p className="font-semibold text-slate-800">How final unit price is derived</p>
                   <p className="mt-1 tabular-nums">
-                    {formatCurrency(directUnitSubtotal)} + {formatCurrency(indirectSubtotal)} (Indirect: OCM + CP + VAT) = {formatCurrency(selectedItem.totals.totalUnitCostSubmitted)}
+                    Direct Cost = Labor + Equipment = {formatCurrency(selectedItem.totals.laborSubmitted)} + {formatCurrency(selectedItem.totals.equipmentSubmitted)} = {formatCurrency(directCostSubmitted)}
+                  </p>
+                  <p className="mt-1 tabular-nums">
+                    Direct Unit Cost = Direct Cost / Output Rate = {formatCurrency(directCostSubmitted)} / {formatNumber(outputRate)} = {formatCurrency(directUnitCostOnly)}
+                  </p>
+                  <p className="mt-1 tabular-nums">
+                    Direct Unit + Materials = {formatCurrency(directUnitCostOnly)} + {formatCurrency(selectedItem.totals.materialsSubmitted)} = {formatCurrency(directUnitSubtotal)}
+                  </p>
+                  <p className="mt-1 tabular-nums">
+                    Total Unit Cost = {formatCurrency(directUnitSubtotal)} + {formatCurrency(indirectSubtotal)} (OCM + CP + VAT) = {formatCurrency(selectedItem.totals.totalUnitCostSubmitted)}
                   </p>
                   <p className="mt-1 tabular-nums">
                     OCM: {formatCurrency(selectedItem.totals.ocmValue)} | CP: {formatCurrency(selectedItem.totals.cpValue)} | VAT: {formatCurrency(selectedItem.totals.vatValue)}

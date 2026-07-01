@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ManualPowConfigModal from './manual-pow/ManualPowConfigModal';
 import ManualPowItemsTable from './manual-pow/ManualPowItemsTable';
 import ManualPowTemplateModal from './manual-pow/ManualPowTemplateModal';
@@ -74,9 +74,11 @@ export default function ManualPowManager({
   const [bulkError, setBulkError] = useState<string | null>(null);
 
   const [pendingQuantities, setPendingQuantities] = useState<Record<string, number>>({});
+  const [selectedManualItemIds, setSelectedManualItemIds] = useState<Record<string, boolean>>({});
   const [updatingRowId, setUpdatingRowId] = useState<string | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
@@ -114,6 +116,14 @@ export default function ManualPowManager({
 
   const laborLocation = manualConfig?.laborLocation || district || projectLocation || 'Project Location';
   const hasManualSettings = Boolean(manualConfig?.laborLocation || district || projectLocation);
+
+  useEffect(() => {
+    setSelectedManualItemIds((prev) => {
+      const validIds = new Set(manualItems.map((item) => item._id));
+      const next = Object.fromEntries(Object.entries(prev).filter(([id, selected]) => selected && validIds.has(id)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [manualItems]);
 
   const resetTemplateModalState = () => {
     setLoadCommonTemplates(false);
@@ -400,6 +410,61 @@ export default function ManualPowManager({
     }
   };
 
+  const selectedManualItems = useMemo(
+    () => manualItems.filter((item) => selectedManualItemIds[item._id]),
+    [manualItems, selectedManualItemIds],
+  );
+
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (readOnly) return;
+    if (!checked) {
+      setSelectedManualItemIds({});
+      return;
+    }
+
+    setSelectedManualItemIds(
+      manualItems.reduce<Record<string, boolean>>((acc, item) => {
+        acc[item._id] = true;
+        return acc;
+      }, {}),
+    );
+  };
+
+  const handleToggleSelectItem = (itemId: string, checked: boolean) => {
+    if (readOnly) return;
+    setSelectedManualItemIds((prev) => {
+      if (!checked) {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      }
+
+      return { ...prev, [itemId]: true };
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (readOnly) return;
+    if (selectedManualItems.length === 0) return;
+
+    try {
+      setDeletingRowId('__bulk__');
+      setSaveSuccess(null);
+      for (const item of selectedManualItems) {
+        await deleteProjectBoqItem(item._id);
+      }
+      await onReload({ silent: true });
+      setSelectedManualItemIds({});
+      setSaveError(null);
+    } catch (err: any) {
+      console.error('Failed to delete selected BOQ items', err);
+      setSaveError(err.message || 'Failed to delete selected BOQ items.');
+    } finally {
+      setDeletingRowId(null);
+      setConfirmBulkDelete(false);
+    }
+  };
+
   const totalManualAmount = useMemo(() => manualItems.reduce((sum, item) => sum + (item.totalAmount || 0), 0), [manualItems]);
 
   return (
@@ -422,6 +487,20 @@ export default function ManualPowManager({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {!readOnly && manualItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmBulkDelete(true)}
+              disabled={selectedManualItems.length === 0 || deletingRowId === '__bulk__'}
+              className={`inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium ${
+                selectedManualItems.length > 0
+                  ? 'border-red-200 text-red-700 hover:bg-red-50'
+                  : 'cursor-not-allowed border-gray-200 text-gray-400'
+              }`}
+            >
+              {deletingRowId === '__bulk__' ? 'Deleting...' : `Delete Selected${selectedManualItems.length ? ` (${selectedManualItems.length})` : ''}`}
+            </button>
+          )}
           <button
             type="button"
             onClick={openConfigModal}
@@ -477,10 +556,13 @@ export default function ManualPowManager({
         manualItems={manualItems}
         loading={loading}
         readOnly={readOnly}
+        selectedItemIds={selectedManualItemIds}
         pendingQuantities={pendingQuantities}
         updatingRowId={updatingRowId}
         deletingRowId={deletingRowId}
         totalManualAmount={totalManualAmount}
+        onToggleSelectAll={handleToggleSelectAll}
+        onToggleSelectItem={handleToggleSelectItem}
         onPendingQuantityChange={(itemId, quantity) => setPendingQuantities((prev) => ({ ...prev, [itemId]: quantity }))}
         onQuantityBlur={handleQuantityBlur}
         onDelete={requestDelete}
@@ -507,6 +589,35 @@ export default function ManualPowManager({
                 className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {deletingRowId === confirmDeleteId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBulkDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900">Delete selected BOQ lines?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              This removes {selectedManualItems.length} selected pay item{selectedManualItems.length === 1 ? '' : 's'}. This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={deletingRowId === '__bulk__'}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={deletingRowId === '__bulk__'}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingRowId === '__bulk__' ? 'Deleting...' : 'Delete Selected'}
               </button>
             </div>
           </div>

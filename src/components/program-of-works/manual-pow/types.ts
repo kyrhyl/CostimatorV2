@@ -8,6 +8,7 @@ export interface ProjectBoqItem {
   quantity: number;
   part?: string;
   category?: string;
+  subCategory?: string;
   unitCost?: number;
   totalAmount?: number;
   directCost?: number;
@@ -40,6 +41,7 @@ export interface TemplateSummary {
   unitOfMeasurement: string;
   part?: string;
   category?: string;
+  subCategory?: string;
   isPinnedCommon?: boolean;
 }
 

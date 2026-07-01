@@ -108,7 +108,7 @@ export default function CMPDPage() {
 
   useEffect(() => {
     fetchPrices();
-  }, [searchTerm, activeFilter, districtFilter, versionFilter]);
+  }, [searchTerm, activeFilter, districtFilter, versionFilter, priceSourceFilter]);
 
   useEffect(() => {
     fetchCmpdVersions();
@@ -138,10 +138,14 @@ export default function CMPDPage() {
     try {
       setPricesLoading(true);
       const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
+      const trimmedSearch = searchTerm.trim();
+      if (trimmedSearch) params.append('search', trimmedSearch);
       if (activeFilter !== 'all') params.append('isActive', activeFilter);
+      if (districtFilter && districtFilter !== MISSING_TOKEN) params.append('district', districtFilter);
+      if (versionFilter && versionFilter !== MISSING_TOKEN) params.append('cmpd_version', versionFilter);
+      if (priceSourceFilter !== 'all' && priceSourceFilter !== 'missing') params.append('priceSource', priceSourceFilter);
       
-      const response = await fetch(`/api/master/materials/prices?${params}`);
+      const response = await fetch(`/api/master/materials/prices?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

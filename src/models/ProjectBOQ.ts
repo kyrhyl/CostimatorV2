@@ -45,6 +45,7 @@ export interface IProjectBOQ extends Document {
   unitOfMeasurement: string;
   outputPerHour: number;
   category?: string;
+  subCategory?: string;
   specification?: string;
   notes?: string;
   
@@ -125,6 +126,7 @@ const ProjectBOQSchema = new Schema<IProjectBOQ>(
     unitOfMeasurement: { type: String, required: true },
     outputPerHour: { type: Number, required: true },
     category: { type: String },
+    subCategory: { type: String },
     specification: { type: String },
     notes: { type: String },
     quantity: { type: Number, required: true, min: 0 },

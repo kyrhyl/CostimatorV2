@@ -24,7 +24,9 @@ function getItemNumberPrefix(itemNumber: string): number {
 function getDPWHPart(itemNumber: string): { part: string; partName: string } {
   const prefix = getItemNumberPrefix(itemNumber);
 
-  if (prefix >= 800 && prefix < 900) {
+  if (prefix >= 100 && prefix < 800) {
+    return { part: 'PART B', partName: 'OTHER GENERAL REQUIREMENTS' };
+  } else if (prefix >= 800 && prefix < 900) {
     return { part: 'PART C', partName: 'EARTHWORK' };
   } else if (prefix >= 900 && prefix < 1000) {
     return { part: 'PART D', partName: 'REINFORCED CONCRETE / BUILDINGS' };
@@ -79,6 +81,12 @@ function getSubcategory(itemNumber: string, category?: string): string {
     if (categoryLower.includes('reinforc')) return 'Reinforcing Steel';
     if (categoryLower.includes('precast')) return 'Precast Concrete';
 
+    return category;
+  }
+
+  // Part B - Other General Requirements
+  if (prefix >= 100 && prefix < 800) {
+    if (!category) return 'General Requirements';
     return category;
   }
 
@@ -162,7 +170,7 @@ export function classifyDPWHItem(itemNumber: string, category?: string): DPWHCla
  * Sort function for DPWH parts (to maintain correct order: C, D, E, F, G)
  */
 export function sortDPWHParts(a: string, b: string): number {
-  const partOrder = ['PART A', 'PART C', 'PART D', 'PART E', 'PART F', 'PART G'];
+  const partOrder = ['PART A', 'PART B', 'PART C', 'PART D', 'PART E', 'PART F', 'PART G'];
   const partA = a.split(':')[0];
   const partB = b.split(':')[0];
 

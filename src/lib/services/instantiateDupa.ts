@@ -120,7 +120,9 @@ export async function instantiateDUPA(
     const amount = labor.noOfPersons * labor.noOfHours * hourlyRate;
     
     laborComputed.push({
-      ...labor.toObject(),
+      designation: labor.designation,
+      noOfPersons: labor.noOfPersons,
+      noOfHours: labor.noOfHours,
       hourlyRate,
       amount
     });
@@ -145,7 +147,10 @@ export async function instantiateDUPA(
     const amount = equip.noOfUnits * equip.noOfHours * hourlyRate;
     
     equipmentComputed.push({
-      ...equip.toObject(),
+      equipmentId: equip.equipmentId,
+      description: equip.description,
+      noOfUnits: equip.noOfUnits,
+      noOfHours: equip.noOfHours,
       hourlyRate,
       amount
     });
@@ -193,12 +198,30 @@ export async function instantiateDUPA(
     const amount = material.quantity * unitCost;
     
     materialComputed.push({
-      ...material.toObject(),
+      materialCode: material.materialCode,
+      description: material.description,
+      unit: material.unit,
+      quantity: material.quantity,
       unitCost,
       amount
     });
     
     materialCost += amount;
+  }
+
+  if (template.includeConsumables) {
+    const consumablesAmount = materialCost * (template.consumablesPercentage / 100);
+
+    materialComputed.push({
+      materialCode: '',
+      description: `Consumables (${template.consumablesPercentage}% of Materials Cost)`,
+      unit: 'LS',
+      quantity: 1,
+      unitCost: consumablesAmount,
+      amount: consumablesAmount,
+    });
+
+    materialCost += consumablesAmount;
   }
   
   // 7. Calculate costs

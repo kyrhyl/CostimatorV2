@@ -76,6 +76,7 @@ export default function EditDUPATemplatePage() {
   const [payItemNumber, setPayItemNumber] = useState('');
   const [payItemDescription, setPayItemDescription] = useState('');
   const [unitOfMeasurement, setUnitOfMeasurement] = useState('');
+  const [selectedPayItemId, setSelectedPayItemId] = useState('');
   const [outputPerHour, setOutputPerHour] = useState(1);
   const [category, setCategory] = useState('');
   const [specification, setSpecification] = useState('');
@@ -91,6 +92,9 @@ export default function EditDUPATemplatePage() {
   // Master data for dropdowns
   const [equipmentOptions, setEquipmentOptions] = useState<Array<{ _id: string; description: string }>>([]);
   const [materialOptions, setMaterialOptions] = useState<Array<{ materialCode: string; description: string; unit: string }>>([]);
+  const [payItemOptions, setPayItemOptions] = useState<Array<{ _id: string; payItemNumber: string; description: string; unit: string; part: string }>>([]);
+  const [availableParts, setAvailableParts] = useState<string[]>([]);
+  const [selectedPart, setSelectedPart] = useState('');
   const [baseEquipmentOptions, setBaseEquipmentOptions] = useState<Array<{ _id: string; description: string }>>([]);
   const [baseMaterialOptions, setBaseMaterialOptions] = useState<Array<{ materialCode: string; description: string; unit: string }>>([]);
   const [equipmentSearchLoading, setEquipmentSearchLoading] = useState(false);
@@ -99,6 +103,8 @@ export default function EditDUPATemplatePage() {
   // Minor Tools configuration
   const [includeMinorTools, setIncludeMinorTools] = useState(false);
   const [minorToolsPercentage, setMinorToolsPercentage] = useState(10);
+  const [includeConsumables, setIncludeConsumables] = useState(false);
+  const [consumablesPercentage, setConsumablesPercentage] = useState(10);
 
   // Add-on percentages
   const [ocmPercentage, setOcmPercentage] = useState(15);
@@ -118,22 +124,36 @@ export default function EditDUPATemplatePage() {
     value: opt.materialCode,
     label: opt.description,
   }));
+  const filteredPayItems = selectedPart
+    ? payItemOptions.filter((item) => item.part === selectedPart)
+    : payItemOptions;
+  const payItemDropdownOptions = filteredPayItems.map((opt) => ({
+    value: opt._id,
+    label: `${opt.payItemNumber} - ${opt.description}${opt.unit ? ` (${opt.unit})` : ''}`,
+  }));
+  const payItemPlaceholder = loading
+    ? 'Loading pay items...'
+    : selectedPart
+      ? `Search ${selectedPart} pay items`
+      : 'Search pay items';
 
   const loadData = useCallback(async () => {
     try {
       // Load template data and master data in parallel
-      const [templateRes, eqRes, matRes, matPriceRes] = await Promise.all([
+      const [templateRes, eqRes, matRes, matPriceRes, payRes] = await Promise.all([
         fetch(`/api/dupa-templates/${id}`),
         fetch('/api/master/equipment'),
         fetch('/api/master/materials'),
-        fetch('/api/master/materials/prices?isActive=true')
+        fetch('/api/master/materials/prices?isActive=true'),
+        fetch('/api/master/pay-items?limit=2000'),
       ]);
 
-      const [templateData, eqJson, matJson, matPriceJson] = await Promise.all([
+      const [templateData, eqJson, matJson, matPriceJson, payJson] = await Promise.all([
         templateRes.json(),
         eqRes.json(),
         matRes.json(),
-        matPriceRes.json()
+        matPriceRes.json(),
+        payRes.json(),
       ]);
 
       // Load master data
@@ -155,14 +175,27 @@ export default function EditDUPATemplatePage() {
         setMaterialOptions(materialOptionsData);
         setBaseMaterialOptions(materialOptionsData);
       }
+      if (payJson.success) {
+        const payItems = payJson.data.map((p: any) => ({
+          _id: p._id,
+          payItemNumber: p.payItemNumber,
+          description: p.description,
+          unit: p.unit,
+          part: p.part,
+        }));
+        setPayItemOptions(payItems);
+        setAvailableParts(Array.from(new Set(payItems.map((p: { part: string }) => p.part))).sort() as string[]);
+      }
 
       // Load template data
       if (templateData.success) {
         const template = templateData.data;
+        setSelectedPayItemId(template.payItemId || '');
         setPayItemNumber(template.payItemNumber || '');
         setPayItemDescription(template.payItemDescription || '');
         setUnitOfMeasurement(template.unitOfMeasurement || '');
         setOutputPerHour(template.outputPerHour || 1);
+        setSelectedPart(template.part || template.category || '');
         setCategory(template.category || '');
         setSpecification(template.specification || '');
         setNotes(template.notes || '');
@@ -171,6 +204,8 @@ export default function EditDUPATemplatePage() {
         setVatPercentage(template.vatPercentage || 12);
         setIncludeMinorTools(template.includeMinorTools || false);
         setMinorToolsPercentage(template.minorToolsPercentage || 10);
+        setIncludeConsumables(template.includeConsumables || false);
+        setConsumablesPercentage(template.consumablesPercentage || 10);
         setIsActive(template.isActive !== undefined ? template.isActive : true);
 
         // Load templates
@@ -338,12 +373,43 @@ export default function EditDUPATemplatePage() {
     setMaterialTemplate(updated);
   };
 
+  const handlePayItemSelect = (nextPayItemId: string) => {
+    setSelectedPayItemId(nextPayItemId);
+    if (!nextPayItemId) {
+      setPayItemNumber('');
+      setPayItemDescription('');
+      setUnitOfMeasurement('');
+      return;
+    }
+
+    const selectedPayItem = payItemOptions.find((item) => item._id === nextPayItemId);
+    if (selectedPayItem) {
+      setPayItemNumber(selectedPayItem.payItemNumber);
+      setPayItemDescription(selectedPayItem.description);
+      setUnitOfMeasurement(selectedPayItem.unit);
+      setSelectedPart(selectedPayItem.part || selectedPart);
+    }
+  };
+
+  const handlePartSelect = (part: string) => {
+    setSelectedPart(part);
+    setSelectedPayItemId('');
+    setPayItemNumber('');
+    setPayItemDescription('');
+    setUnitOfMeasurement('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
 
     // Basic validation
+    if (!selectedPayItemId) {
+      setError('Please select a pay item from the master pay item database');
+      setIsSubmitting(false);
+      return;
+    }
     if (!payItemNumber.trim()) {
       setError('Pay item number is required');
       setIsSubmitting(false);
@@ -376,6 +442,7 @@ export default function EditDUPATemplatePage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          payItemId: selectedPayItemId,
           payItemNumber: payItemNumber.trim(),
           payItemDescription: payItemDescription.trim(),
           unitOfMeasurement: unitOfMeasurement.trim(),
@@ -391,6 +458,8 @@ export default function EditDUPATemplatePage() {
           vatPercentage: Number(vatPercentage),
           includeMinorTools,
           minorToolsPercentage: Number(minorToolsPercentage),
+          includeConsumables,
+          consumablesPercentage: Number(consumablesPercentage),
           isActive,
         }),
       });
@@ -464,16 +533,45 @@ export default function EditDUPATemplatePage() {
             <h2 className="text-xl font-bold text-gray-900 mb-4">Basic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Part</label>
+                <select
+                  value={selectedPart}
+                  onChange={(e) => handlePartSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Parts</option>
+                  {availableParts.map((part) => (
+                    <option key={part} value={part}>{part}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Reference Pay Item *</label>
+                <Combobox
+                  value={selectedPayItemId}
+                  selectedLabel={selectedPayItemId ? payItemDropdownOptions.find((opt) => opt.value === selectedPayItemId)?.label : ''}
+                  options={payItemDropdownOptions}
+                  placeholder={payItemPlaceholder}
+                  disabled={loading}
+                  className="text-sm"
+                  clearable
+                  onChange={handlePayItemSelect}
+                />
+                <p className="mt-1 text-xs text-gray-500">Selecting a pay item syncs the code, description, and unit from the master pay item database.</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Pay Item Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={payItemNumber}
-                  onChange={(e) => setPayItemNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   required
-                  placeholder="e.g., 801 (1)"
+                  placeholder="Select a pay item"
+                  readOnly
                 />
               </div>
 
@@ -484,10 +582,10 @@ export default function EditDUPATemplatePage() {
                 <input
                   type="text"
                   value={unitOfMeasurement}
-                  onChange={(e) => setUnitOfMeasurement(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   required
-                  placeholder="e.g., cu.m, sq.m, l.s."
+                  placeholder="Select a pay item"
+                  readOnly
                 />
               </div>
 
@@ -497,11 +595,11 @@ export default function EditDUPATemplatePage() {
                 </label>
                 <textarea
                   value={payItemDescription}
-                  onChange={(e) => setPayItemDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   rows={2}
                   required
-                  placeholder="Enter detailed description of the work item"
+                  placeholder="Select a pay item"
+                  readOnly
                 />
               </div>
 
@@ -810,11 +908,11 @@ export default function EditDUPATemplatePage() {
                       </label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.001"
                         value={entry.quantity}
                         onChange={(e) => updateMaterialEntry(index, 'quantity', parseFloat(e.target.value) || 0)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        min="0"
+                        min="0.001"
                       />
                     </div>
                     <button
@@ -900,6 +998,36 @@ export default function EditDUPATemplatePage() {
                     step="0.01"
                     value={minorToolsPercentage}
                     onChange={(e) => setMinorToolsPercentage(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-start gap-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={includeConsumables}
+                  onChange={(e) => setIncludeConsumables(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Include Consumables
+                </label>
+              </div>
+              {includeConsumables && (
+                <div className="flex-1 max-w-xs">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Consumables Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={consumablesPercentage}
+                    onChange={(e) => setConsumablesPercentage(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     min="0"
                     max="100"

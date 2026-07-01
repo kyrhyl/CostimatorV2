@@ -6,6 +6,7 @@ import ProjectBOQ from '@/models/ProjectBOQ';
 import CostEstimate from '@/models/CostEstimate';
 import {
   getDivisionForPart,
+  getPartKey,
   getPartDescription,
   normalizePart,
   PART_ORDER,
@@ -13,8 +14,8 @@ import {
 import { normalizePowMode } from '@/lib/utils/dupa-identity';
 
 function sortByPart(a: { part: string }, b: { part: string }) {
-  const aKey = a.part.replace('PART ', '').trim();
-  const bKey = b.part.replace('PART ', '').trim();
+  const aKey = getPartKey(a.part).replace('PART ', '').trim();
+  const bKey = getPartKey(b.part).replace('PART ', '').trim();
   return PART_ORDER.indexOf(aKey) - PART_ORDER.indexOf(bKey);
 }
 
@@ -60,7 +61,7 @@ export async function GET(
         const unitCost = quantity > 0 ? totalCost / quantity : 0;
 
         return {
-          part: normalizePart(line.part || 'PART C'),
+          part: normalizePart(line.part || '') || 'UNASSIGNED PART',
           payItemNumber: line.payItemNumber || '',
           payItemDescription: line.payItemDescription || '',
           quantity,
@@ -84,7 +85,7 @@ export async function GET(
         const unitCost = quantity > 0 ? totalCost / quantity : 0;
 
         return {
-          part: normalizePart(item.part || 'PART C'),
+          part: normalizePart(item.part || '') || 'UNASSIGNED PART',
           payItemNumber: item.payItemNumber || '',
           payItemDescription: item.payItemDescription || '',
           quantity,
@@ -126,7 +127,7 @@ export async function GET(
     }>();
 
     for (const item of sourceItems) {
-      const part = normalizePart(item.part || 'PART C');
+      const part = normalizePart(item.part || '') || 'UNASSIGNED PART';
       const division = getDivisionForPart(part);
       const partDescription = getPartDescription(part);
       const directCost = item.directCost || 0;

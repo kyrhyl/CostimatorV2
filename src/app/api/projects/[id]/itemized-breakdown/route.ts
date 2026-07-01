@@ -5,11 +5,12 @@ import ProjectBOQ from '@/models/ProjectBOQ';
 import Estimate from '@/models/Estimate';
 import CostEstimate from '@/models/CostEstimate';
 import mongoose from 'mongoose';
-import { getDivisionForPart, normalizePart, PART_DESCRIPTIONS, PART_ORDER } from '@/lib/utils/dpwh-constants';
+import { getDivisionForPart, getPartKey, normalizePart, PART_DESCRIPTIONS, PART_ORDER } from '@/lib/utils/dpwh-constants';
 
 interface ItemizedLineItem {
   payItemNumber: string;
   payItemDescription: string;
+  subGroup?: string;
   quantity: number;
   quantityEvaluated: number;
   unitOfMeasurement: string;
@@ -77,6 +78,8 @@ export async function GET(
         ocmCost: line.ocmCost || 0,
         vatCost: line.vatCost || 0,
         part: line.part || '',
+        category: line.category || '',
+        subCategory: line.subCategory || '',
         partDescription: '',
         laborItems: line.laborItems || [],
         equipmentItems: line.equipmentItems || [],
@@ -93,6 +96,8 @@ export async function GET(
         ocmCost: line.breakdown?.ocmSubmitted || 0,
         vatCost: line.breakdown?.vatSubmitted || 0,
         part: line.part || '',
+        category: line.category || '',
+        subCategory: line.subCategory || '',
         partDescription: line.partDescription || '',
         laborItems: [],
         equipmentItems: [],
@@ -109,6 +114,8 @@ export async function GET(
         ocmCost: item.ocmCost || 0,
         vatCost: item.vatCost || 0,
         part: item.part || (item.templateId as any)?.part || '',
+        category: item.category || (item.templateId as any)?.category || '',
+        subCategory: item.subCategory || (item.templateId as any)?.subCategory || '',
         partDescription: (item.templateId as any)?.category || '',
         laborItems: [],
         equipmentItems: [],
@@ -162,17 +169,7 @@ function groupItemsByPartDetailed(boqItems: any[], partDescriptions: Record<stri
   const partMap = new Map<string, { items: ItemizedLineItem[]; partTotal: number }>();
 
   boqItems.forEach((item) => {
-    let part: string;
-    
-    if (item.part) {
-      part = normalizePart(item.part);
-    } else if (item.templateId && (item.templateId as any)?.part) {
-      part = normalizePart((item.templateId as any).part);
-    } else if (item.category) {
-      part = normalizePart(item.category);
-    } else {
-      part = 'PART C';
-    }
+    const part = normalizePart(item.part || (item.templateId && (item.templateId as any)?.part) || '') || 'UNASSIGNED PART';
     
     const partKey = part;
 
@@ -193,6 +190,7 @@ function groupItemsByPartDetailed(boqItems: any[], partDescriptions: Record<stri
     partData.items.push({
       payItemNumber: item.payItemNumber || '',
       payItemDescription: item.payItemDescription || '',
+      subGroup: getPartKey(part) === 'PART E' ? String(item.subCategory || item.category || '') : '',
       quantity: quantity,
       quantityEvaluated: quantity,
       unitOfMeasurement: item.unitOfMeasurement || '',
@@ -212,7 +210,7 @@ function groupItemsByPartDetailed(boqItems: any[], partDescriptions: Record<stri
   const result: PartGroup[] = Array.from(partMap.entries())
     .map(([part, data]) => ({
       part,
-      partDescription: partDescriptions[part] || 'Other Works',
+      partDescription: partDescriptions[getPartKey(part)] || 'Other Works',
       division: getDivisionForPart(part),
       items: data.items.map(item => ({
         ...item,
@@ -222,8 +220,8 @@ function groupItemsByPartDetailed(boqItems: any[], partDescriptions: Record<stri
       partPercent: totalDirectCost > 0 ? (data.partTotal / totalDirectCost) * 100 : 0
     }))
     .sort((a, b) => {
-      const aOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-      const bOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+      const aOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+      const bOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
       if (aOrder !== -1 && bOrder !== -1) return aOrder - bOrder;
       return a.part.localeCompare(b.part);
     });

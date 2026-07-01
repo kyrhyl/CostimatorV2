@@ -17,6 +17,8 @@ interface Equipment {
   lubeCost?: number;
   calculatedRate?: number;
   hourlyRate?: number;
+  hasRate?: boolean;
+  usingMasterRate?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,10 +89,24 @@ export default function EquipmentPage() {
     flywheelHorsepower: 0,
     fuelConsumptionAvgLph: 0,
     lubeConsumptionAvgLph: 0,
+    hourlyRate: 0,
   });
 
   const formatCurrency = (value: number) =>
     `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const renderRateValue = (value?: number | null, emphasis = false, usingMasterRate = false) => {
+    if (value === null || value === undefined) {
+      return <span className="text-gray-400">Not set</span>;
+    }
+
+    return (
+      <span className={emphasis ? 'font-semibold text-amber-700' : ''}>
+        {formatCurrency(Number(value || 0))}
+        {usingMasterRate ? <span className="ml-2 text-xs font-normal text-slate-500">Master</span> : null}
+      </span>
+    );
+  };
 
   const formatLph = (value: number) =>
     Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
@@ -113,6 +129,8 @@ export default function EquipmentPage() {
   }, [tableMode, rateEdition]);
 
   const rateMode: 'fixed' | 'variable_fuel_lube' = tableMode === 'variable' ? 'variable_fuel_lube' : 'fixed';
+  const isMasterView = tableMode === 'database';
+  const isRateView = tableMode !== 'database';
 
   const fetchEditions = async () => {
     try {
@@ -349,15 +367,19 @@ export default function EquipmentPage() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, description: formData.completeDescription }),
+        body: JSON.stringify({
+          ...formData,
+          description: formData.completeDescription,
+          rateEdition: tableMode !== 'database' ? rateEdition.trim().toUpperCase() : '',
+          syncRateEntries: tableMode !== 'database' && Boolean(rateEdition.trim()),
+        }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
       const result: ApiResponse = await response.json();
       
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      }
+
       if (result.success) {
         setShowForm(false);
         setEditingEquipment(null);
@@ -416,6 +438,7 @@ export default function EquipmentPage() {
       flywheelHorsepower: eq.flywheelHorsepower || 0,
       fuelConsumptionAvgLph: eq.fuelConsumptionAvgLph || 0,
       lubeConsumptionAvgLph: eq.lubeConsumptionAvgLph || 0,
+      hourlyRate: eq.hourlyRate || 0,
     });
     setShowForm(true);
   };
@@ -453,6 +476,7 @@ export default function EquipmentPage() {
       flywheelHorsepower: 0,
       fuelConsumptionAvgLph: 0,
       lubeConsumptionAvgLph: 0,
+      hourlyRate: 0,
     });
   };
 
@@ -486,7 +510,7 @@ export default function EquipmentPage() {
             onClick={() => setTableMode('database')}
             className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border ${tableMode === 'database' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-700 border-slate-300'}`}
           >
-            Equipment Database
+            Equipment Master
           </button>
         </div>
 
@@ -524,28 +548,45 @@ export default function EquipmentPage() {
           </div>
 
           <div className="md:col-span-5 flex items-end gap-2">
-            <button
-              onClick={() => setShowAcelCsvImport(true)}
-              className="flex-1 bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-xs font-semibold"
-            >
-              Import ACEL CSV
-            </button>
-            <button
-              onClick={() => setShowCsvImport(true)}
-              className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors text-xs font-semibold"
-            >
-              Import CSV
-            </button>
-            <button
-              onClick={() => {
-                setEditingEquipment(null);
-                resetForm();
-                setShowForm(true);
-              }}
-              className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs font-semibold"
-            >
-              + Add New
-            </button>
+            {isMasterView ? (
+              <>
+                <button
+                  onClick={() => setShowCsvImport(true)}
+                  className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors text-xs font-semibold"
+                >
+                  Import Equipment CSV
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingEquipment(null);
+                    resetForm();
+                    setShowForm(true);
+                  }}
+                  className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs font-semibold"
+                >
+                  + Add Equipment
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowAcelCsvImport(true)}
+                  className="flex-1 bg-emerald-600 text-white px-3 py-2 rounded-md hover:bg-emerald-700 transition-colors text-xs font-semibold"
+                >
+                  Import ACEL Version CSV
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingEquipment(null);
+                    resetForm();
+                    setShowForm(true);
+                  }}
+                  className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition-colors text-xs font-semibold"
+                >
+                  + Add Equipment for Edition
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -629,13 +670,21 @@ export default function EquipmentPage() {
           Total: {equipment.length} equipment item{equipment.length !== 1 ? 's' : ''}
           {tableMode !== 'database' && rateEdition.trim() && <span className="ml-2">| Edition: <span className="font-semibold">{rateEdition.trim().toUpperCase()}</span></span>}
         </div>
+        {isRateView && (
+          <p className="mt-2 text-xs text-gray-500">
+            These rate views show the same master equipment list. Values tagged `Master` are fallback prices from the equipment master when the selected edition has no explicit rate yet.
+          </p>
+        )}
       </div>
 
       {showAcelCsvImport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Import ACEL Rates (CSV)</h2>
+              <h2 className="text-2xl font-bold mb-4">Import ACEL Version Rates (CSV)</h2>
+              <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Upload one ACEL CSV for an edition/version. The import creates or updates both Fixed Rates and Variable Rates for matching equipment.
+              </p>
               <div className="grid grid-cols-1 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Edition *</label>
@@ -660,12 +709,12 @@ export default function EquipmentPage() {
                   onChange={(e) => setAcelCsvFile(e.target.files?.[0] || null)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
-                <p className="mt-1 text-xs text-gray-500">Use normalized ACEL CSV format (like `resources/ACEL_RATE.csv`).</p>
+                <p className="mt-1 text-xs text-gray-500">Use one normalized ACEL CSV file (like `resources/ACEL_RATE.csv`) to update or add a full edition/version.</p>
               </div>
               <div className="flex justify-end gap-3">
                 <button onClick={() => setShowAcelCsvImport(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700">Cancel</button>
                 <button onClick={handleImportAcelCsv} disabled={acelCsvSubmitting} className="px-4 py-2 bg-emerald-600 text-white rounded-md disabled:opacity-50">
-                  {acelCsvSubmitting ? 'Importing...' : 'Import ACEL CSV'}
+                  {acelCsvSubmitting ? 'Importing...' : 'Import Version CSV'}
                 </button>
               </div>
             </div>
@@ -753,9 +802,14 @@ export default function EquipmentPage() {
           <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-6">
-                {editingEquipment ? 'Edit Equipment' : 'Add New Equipment'}
+                {editingEquipment ? 'Edit Equipment' : isRateView ? 'Add Equipment for Selected Edition' : 'Add Equipment'}
               </h2>
-              
+              {tableMode !== 'database' && rateEdition.trim() && (
+                <p className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  Saving here also creates or updates matching fixed and variable rate entries for edition `{rateEdition.trim().toUpperCase()}`.
+                </p>
+              )}
+               
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div>
@@ -797,7 +851,7 @@ export default function EquipmentPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Capacity
@@ -823,7 +877,20 @@ export default function EquipmentPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price per Hour
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.hourlyRate}
+                      onChange={(e) => setFormData({ ...formData, hourlyRate: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                   
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -890,7 +957,7 @@ export default function EquipmentPage() {
           <div className="p-8 text-center text-gray-500">Select an ACEL edition to view {tableMode === 'fixed' ? 'fixed' : 'variable'} rates.</div>
         ) : equipment.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            No equipment found. Click "Add New" or "Import CSV" to add equipment.
+            No equipment found. Click "Add New" or "Import CSV" to create equipment in the master list.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -940,15 +1007,15 @@ export default function EquipmentPage() {
                     )}
                     {tableMode === 'fixed' && (
                       <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">
-                        {formatCurrency(Number(eq.hourlyRate || 0))}
+                        {renderRateValue(eq.hourlyRate, false, Boolean(eq.usingMasterRate))}
                       </td>
                     )}
                     {tableMode === 'variable' && (
                       <>
-                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.basePrice || 0))}</td>
-                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.fuelCost || 0))}</td>
-                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{formatCurrency(Number(eq.lubeCost || 0))}</td>
-                        <td className="px-3 py-3 text-right text-sm font-semibold text-amber-700 whitespace-nowrap">{formatCurrency(Number(eq.calculatedRate || eq.basePrice || 0))}</td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{renderRateValue(eq.basePrice, false, Boolean(eq.usingMasterRate))}</td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{renderRateValue(eq.fuelCost)}</td>
+                        <td className="px-3 py-3 text-right text-sm text-gray-900 whitespace-nowrap">{renderRateValue(eq.lubeCost)}</td>
+                        <td className="px-3 py-3 text-right text-sm whitespace-nowrap">{renderRateValue(eq.calculatedRate ?? eq.basePrice, true, Boolean(eq.usingMasterRate))}</td>
                       </>
                     )}
                     {tableMode === 'database' && (

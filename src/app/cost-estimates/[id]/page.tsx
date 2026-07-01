@@ -46,6 +46,7 @@ interface EstimateLine {
   equipmentCost: number;
   materialCost: number;
   minorToolsCost: number;
+  consumablesCost?: number;
   laborItems: LaborItem[];
   equipmentItems: EquipmentItem[];
   materialItems: MaterialItem[];

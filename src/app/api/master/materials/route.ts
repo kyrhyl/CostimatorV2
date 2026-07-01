@@ -1,6 +1,6 @@
 /**
  * Master Data API - Materials
- * Manages material catalog with categories and base prices
+ * Manages material reference data with categories and base prices
  */
 
 import { NextRequest, NextResponse } from 'next/server';

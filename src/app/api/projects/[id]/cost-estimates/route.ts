@@ -16,6 +16,8 @@ import mongoose from 'mongoose';
 import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
 import { AUDITOR_ROLE, PROJECT_READ_ROLES, PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
+const DEFAULT_LUBE_PRICE_PER_LITER = 280;
+
 /**
  * POST /api/projects/[id]/cost-estimates
  * Create a new cost estimate for a project
@@ -89,6 +91,22 @@ export async function POST(
 
     const resolvedLaborVersion = body.laborVersion || project.manualPowConfig?.laborVersion || project.laborVersion || '';
     const resolvedEquipmentRateEdition = body.equipmentRateEdition || project.manualPowConfig?.equipmentRateEdition || '';
+    const resolvedEquipmentRateMode = body.withFuelAdjustment
+      ? 'variable_fuel_lube'
+      : (body.equipmentRateMode || project.manualPowConfig?.equipmentRateMode || 'fixed');
+    const resolvedFuelPricePerLiter = resolvedEquipmentRateMode === 'variable_fuel_lube'
+      ? Number(body.fuelPricePerLiter ?? project.manualPowConfig?.fuelPricePerLiter ?? 0)
+      : 0;
+    const resolvedLubePricePerLiter = resolvedEquipmentRateMode === 'variable_fuel_lube'
+      ? Number(body.lubePricePerLiter ?? project.manualPowConfig?.lubePricePerLiter ?? DEFAULT_LUBE_PRICE_PER_LITER)
+      : 0;
+
+    if (resolvedEquipmentRateMode === 'variable_fuel_lube' && !resolvedEquipmentRateEdition) {
+      return NextResponse.json(
+        { error: 'ACEL edition is required when fuel adjustment is enabled' },
+        { status: 400 }
+      );
+    }
 
     if (body.boqSource === 'manual') {
       console.log('[Cost Estimate] Configuring manual Program of Works');
@@ -101,6 +119,9 @@ export async function POST(
         laborLocation: body.location,
         cmpdVersion: resolvedCmpdVersion,
         equipmentRateEdition: resolvedEquipmentRateEdition,
+        equipmentRateMode: resolvedEquipmentRateMode,
+        fuelPricePerLiter: resolvedFuelPricePerLiter,
+        lubePricePerLiter: resolvedLubePricePerLiter,
         laborVersion: resolvedLaborVersion,
         district: resolvedDistrict,
         vatPercentage: body.vatPercentage ?? 12,
@@ -217,6 +238,8 @@ export async function POST(
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpdVersion,
       equipmentRateEdition: resolvedEquipmentRateEdition,
+      equipmentRateMode: resolvedEquipmentRateMode,
+      fuelPricePerLiter: resolvedFuelPricePerLiter,
     });
     
     const calculationResult = await calculateEstimate(
@@ -228,6 +251,9 @@ export async function POST(
         laborVersion: resolvedLaborVersion,
         cmpdVersion: resolvedCmpdVersion,
         equipmentRateEdition: resolvedEquipmentRateEdition,
+        equipmentRateMode: resolvedEquipmentRateMode,
+        fuelPricePerLiter: resolvedFuelPricePerLiter,
+        lubePricePerLiter: resolvedLubePricePerLiter,
         ocmPercentage: body.ocmPercentage ?? 12,
         cpPercentage: body.cpPercentage ?? 10,
         vatPercentage: body.vatPercentage ?? 12,
@@ -257,6 +283,9 @@ export async function POST(
       district: resolvedDistrict,
       cmpdVersion: resolvedCmpdVersion,
       equipmentRateEdition: resolvedEquipmentRateEdition,
+      equipmentRateMode: resolvedEquipmentRateMode,
+      fuelPricePerLiter: resolvedFuelPricePerLiter,
+      lubePricePerLiter: resolvedLubePricePerLiter,
       laborVersion: resolvedLaborVersion,
       effectiveDate: body.effectiveDate || new Date(),
       

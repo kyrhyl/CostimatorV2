@@ -25,6 +25,8 @@ const EquipmentSchema = z.object({
   lubeConsumptionAvgLph: z.number().min(0).optional(),
   hourlyRate: z.number().min(0).optional(),
   rentalRate: z.number().min(0).optional(),
+  rateEdition: z.string().optional(),
+  syncRateEntries: z.boolean().optional(),
 });
 
 const BulkEquipmentSchema = z.array(EquipmentSchema).min(1, 'At least one equipment required');
@@ -45,6 +47,61 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
     }
     return { success: false, error: 'Validation failed' };
   }
+}
+
+async function syncEquipmentRates(
+  equipmentId: string,
+  rateEdition: string,
+  equipmentData: {
+    hourlyRate?: number;
+    fuelConsumptionAvgLph?: number;
+    lubeConsumptionAvgLph?: number;
+  }
+) {
+  const edition = rateEdition.trim().toUpperCase();
+  if (!edition) {
+    return;
+  }
+
+  const hourlyRate = Number(equipmentData.hourlyRate || 0);
+  const fuelAvg = Number(equipmentData.fuelConsumptionAvgLph || 0);
+  const lubeAvg = Number(equipmentData.lubeConsumptionAvgLph || 0);
+
+  await EquipmentRate.updateOne(
+    { equipmentId, edition, mode: 'fixed' },
+    {
+      $set: {
+        source: 'manual',
+        ratePerHour: hourlyRate,
+        dryRate: hourlyRate,
+        isActive: true,
+      },
+    },
+    { upsert: true }
+  );
+
+  await EquipmentRate.updateOne(
+    { equipmentId, edition, mode: 'variable_fuel_lube' },
+    {
+      $set: {
+        source: 'manual',
+        ratePerHour: hourlyRate,
+        dryRate: hourlyRate,
+        fuel: {
+          avgLph: fuelAvg,
+          unitCostPerLiter: 0,
+          costPerHour: 0,
+        },
+        lube: {
+          avgLph: lubeAvg,
+          unitCostPerLiter: 0,
+          costPerHour: 0,
+        },
+        isActive: true,
+      },
+    },
+    { upsert: true }
+  );
 }
 
 // ============================================================================
@@ -137,13 +194,21 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      // In rate views, return only rows covered by selected edition/mode.
-      // This avoids blocking the whole view when master equipment has extra rows.
-      equipment = (equipment as any[]).filter((eq) => rateMap.has(String(eq._id)));
-
       for (const eq of equipment as any[]) {
         const rateData = rateMap.get(String(eq._id));
-        if (!rateData) continue;
+        eq.hasRate = Boolean(rateData);
+        eq.usingMasterRate = false;
+        if (!rateData) {
+          const masterHourlyRate = Number(eq.hourlyRate || 0);
+          eq.usingMasterRate = masterHourlyRate > 0;
+          eq.basePrice = masterHourlyRate > 0 ? masterHourlyRate : null;
+          eq.fuelCost = null;
+          eq.lubeCost = null;
+          eq.calculatedRate = masterHourlyRate > 0 ? masterHourlyRate : null;
+          eq.hourlyRate = masterHourlyRate > 0 ? masterHourlyRate : null;
+          continue;
+        }
+
         if (
           mode === 'variable_fuel_lube' &&
           Number.isFinite(fuelPricePerLiter as number) &&
@@ -251,19 +316,20 @@ export async function POST(request: NextRequest) {
       }
       
       const equipmentData = validation.data!;
+      const { rateEdition, syncRateEntries, ...equipmentFields } = equipmentData;
       const payload = {
-        ...equipmentData,
-        description: (equipmentData.description || equipmentData.completeDescription).trim(),
+        ...equipmentFields,
+        description: (equipmentFields.description || equipmentFields.completeDescription).trim(),
       };
       
       // Check if equipment number already exists
-      const existing = await Equipment.findOne({ no: equipmentData.no });
+      const existing = await Equipment.findOne({ no: equipmentFields.no });
       
       if (existing) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `Equipment #${equipmentData.no} already exists` 
+            error: `Equipment #${equipmentFields.no} already exists` 
           },
           { status: 409 }
         );
@@ -271,6 +337,10 @@ export async function POST(request: NextRequest) {
       
       // Create new equipment
       const equipment = await Equipment.create(payload);
+
+      if (syncRateEntries && rateEdition) {
+        await syncEquipmentRates(String(equipment._id), rateEdition, equipmentFields);
+      }
       
       return NextResponse.json({
         success: true,

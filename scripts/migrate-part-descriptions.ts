@@ -20,17 +20,17 @@ if (!MONGODB_URI) {
   process.exit(1);
 }
 
-const PART_DESCRIPTIONS: Record<string, string> = {
-  'PART A': 'GENERAL',
-  'PART B': 'OTHER GENERAL REQUIREMENTS',
-  'PART C': 'EARTHWORK',
-  'PART D': 'REINFORCED CONCRETE / BUILDINGS',
-  'PART E': 'FINISHINGS AND OTHER CIVIL WORKS',
-  'PART F': 'ELECTRICAL',
-  'PART G': 'MECHANICAL',
+const PART_FULL_NAMES: Record<string, string> = {
+  'PART A': 'PART A: GENERAL',
+  'PART B': 'PART B: OTHER GENERAL REQUIREMENTS',
+  'PART C': 'PART C: EARTHWORK',
+  'PART D': 'PART D: REINFORCED CONCRETE / BUILDINGS',
+  'PART E': 'PART E: FINISHINGS AND OTHER CIVIL WORKS',
+  'PART F': 'PART F: ELECTRICAL',
+  'PART G': 'PART G: MECHANICAL',
 };
 
-const PART_ITEM_PATTERNS: Record<string, RegExp> = {
+const PART_SHORT_PATTERNS: Record<string, RegExp> = {
   'PART A': /^ITEM\s+\d+\s*[-–]/i,
   'PART B': /^ITEM\s+100\s*[-–]/i,
   'PART C': /^ITEM\s+800\s*[-–]/i,
@@ -71,12 +71,16 @@ async function migratePartDescriptions() {
     for (const item of payItems) {
       let targetPart: string | null = null;
 
-      if (item.part && PART_DESCRIPTIONS[item.part]) {
-        targetPart = item.part;
-      } else if (item.item) {
-        for (const [part, pattern] of Object.entries(PART_ITEM_PATTERNS)) {
+      if (item.part) {
+        const shortKey = String(item.part).split(':')[0].trim();
+        if (PART_FULL_NAMES[shortKey]) {
+          targetPart = PART_FULL_NAMES[shortKey];
+        }
+      }
+      if (!targetPart && item.item) {
+        for (const [shortPart, pattern] of Object.entries(PART_SHORT_PATTERNS)) {
           if (pattern.test(item.item)) {
-            targetPart = part;
+            targetPart = PART_FULL_NAMES[shortPart] || shortPart;
             break;
           }
         }
@@ -104,7 +108,9 @@ async function migratePartDescriptions() {
     console.log(`   - Skipped: ${skippedCount}`);
     console.log('\n📊 Items by PART:');
     for (const [part, count] of Object.entries(partCounts)) {
-      console.log(`   - ${part} (${PART_DESCRIPTIONS[part]}): ${count} items`);
+      const shortKey = part.split(':')[0].trim();
+      const fullName = PART_FULL_NAMES[shortKey] || part;
+      console.log(`   - ${fullName}: ${count} items`);
     }
 
     console.log('\n🎉 Migration completed successfully!');

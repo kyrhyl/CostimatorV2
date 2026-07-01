@@ -37,6 +37,7 @@ export default function Combobox({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const suppressFocusOpenRef = useRef(false);
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -69,7 +70,7 @@ export default function Combobox({
   }, [onSearch, inputValue, isOpen, disabled, searchDebounceMs, value, displayLabel]);
 
   const openList = () => {
-    if (disabled) return;
+    if (disabled || suppressFocusOpenRef.current) return;
     setIsOpen(true);
   };
 
@@ -95,10 +96,14 @@ export default function Combobox({
   }, [isOpen]);
 
   const handleSelect = (option: ComboboxOption) => {
+    suppressFocusOpenRef.current = true;
     onChange(option.value);
     setInputValue(option.label);
     closeList();
-    inputRef.current?.focus();
+    inputRef.current?.blur();
+    window.setTimeout(() => {
+      suppressFocusOpenRef.current = false;
+    }, 0);
   };
 
   const handleClear = () => {
@@ -197,8 +202,8 @@ export default function Combobox({
                 data-index={index}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  handleSelect(option);
                 }}
+                onClick={() => handleSelect(option)}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
                   index === highlightedIndex ? 'bg-blue-50' : ''
                 } ${option.value === value ? 'font-medium text-blue-700' : 'text-gray-700'}`}

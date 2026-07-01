@@ -25,6 +25,9 @@ interface AcelEditionResponse {
   editions?: string[];
 }
 
+const DEFAULT_FUEL_PRICE = 90;
+const DEFAULT_LUBE_PRICE = 280;
+
 export default function CreateEstimateModal({
   projectId,
   onClose,
@@ -52,6 +55,8 @@ export default function CreateEstimateModal({
     district: '',
     cmpdVersion: '',
     equipmentRateEdition: '',
+    withFuelAdjustment: false,
+    fuelPricePerLiter: DEFAULT_FUEL_PRICE,
     laborVersion: '',
     vatPercentage: 12,
   });
@@ -168,10 +173,18 @@ export default function CreateEstimateModal({
         district: formData.district,
         cmpdVersion: formData.cmpdVersion,
         equipmentRateEdition: formData.equipmentRateEdition,
+        equipmentRateMode: formData.withFuelAdjustment ? 'variable_fuel_lube' : 'fixed',
+        withFuelAdjustment: formData.withFuelAdjustment,
+        fuelPricePerLiter: formData.withFuelAdjustment ? formData.fuelPricePerLiter : 0,
+        lubePricePerLiter: formData.withFuelAdjustment ? DEFAULT_LUBE_PRICE : 0,
         laborVersion: formData.laborVersion,
         vatPercentage: formData.vatPercentage,
         boqSource: 'manual',
       };
+
+      if (formData.withFuelAdjustment && !formData.equipmentRateEdition) {
+        throw new Error('ACEL edition is required when fuel adjustment is enabled');
+      }
 
       const response = await fetch(`/api/projects/${projectId}/cost-estimates`, {
         method: 'POST',
@@ -224,8 +237,13 @@ export default function CreateEstimateModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4">Create Cost Estimate</h2>
+      <div className="bg-white rounded-xl p-5 max-w-4xl w-full shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">New Program of Works</h2>
+            <p className="mt-1 text-sm text-gray-600">Set the pricing basis, then continue in the manual BOQ workspace.</p>
+          </div>
+        </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
@@ -270,9 +288,9 @@ export default function CreateEstimateModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Estimate Name</label>
+            <label className="block text-sm font-medium mb-1">Name</label>
             <input
               type="text"
               required
@@ -283,15 +301,9 @@ export default function CreateEstimateModal({
             />
           </div>
 
-          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            This project uses the manual Program of Works workflow. After setup, you will add BOQ entries directly from DUPA templates and current master data.
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Location <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium mb-1">Location *</label>
               {loadingLocations ? (
                 <div className="w-full border rounded px-3 py-2 text-gray-400">
                   Loading locations...
@@ -318,7 +330,7 @@ export default function CreateEstimateModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">District</label>
+              <label className="block text-sm font-medium mb-1">District *</label>
               <input
                 type="text"
                 required
@@ -328,91 +340,77 @@ export default function CreateEstimateModal({
                 placeholder="e.g., NCR"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              CMPD Version <span className="text-red-500">*</span>
-            </label>
-            {loadingCmpdVersions ? (
-              <div className="w-full border rounded px-3 py-2 text-gray-400">
-                Loading CMPD versions...
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">CMPD *</label>
+              {loadingCmpdVersions ? (
+                <div className="w-full border rounded px-3 py-2 text-gray-400">Loading CMPD versions...</div>
               ) : cmpdVersions.length === 0 ? (
-                <div className="text-sm text-yellow-600 p-2 bg-yellow-50 rounded">
-                  No CMPD versions found. Materials without CMPD or canvass prices will be zero-priced.
-                </div>
-            ) : (
-              <select
-                required
-                value={formData.cmpdVersion}
-                onChange={(e) => setFormData({ ...formData, cmpdVersion: e.target.value })}
-                className="w-full border rounded px-3 py-2"
-              >
-                <option value="">Select CMPD version...</option>
-                {cmpdVersions.map((version) => (
-                  <option key={version} value={version}>
-                    {version}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+                <div className="text-sm text-yellow-600 p-2 bg-yellow-50 rounded">No CMPD versions found.</div>
+              ) : (
+                <select
+                  required
+                  value={formData.cmpdVersion}
+                  onChange={(e) => setFormData({ ...formData, cmpdVersion: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  <option value="">Select CMPD version...</option>
+                  {cmpdVersions.map((version) => (
+                    <option key={version} value={version}>
+                      {version}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">ACEL Edition (Equipment Rates)</label>
-            {loadingAcelEditions ? (
-              <div className="w-full border rounded px-3 py-2 text-gray-400">
-                Loading ACEL editions...
-              </div>
-            ) : acelEditions.length === 0 ? (
-              <div className="text-sm text-yellow-600 p-2 bg-yellow-50 rounded">
-                No ACEL editions found. Equipment pricing will fall back to the master equipment hourly rates.
-              </div>
-            ) : (
-              <select
-                value={formData.equipmentRateEdition}
-                onChange={(e) => setFormData({ ...formData, equipmentRateEdition: e.target.value })}
-                className="w-full border rounded px-3 py-2"
-              >
-                <option value="">Use master equipment rates</option>
-                {acelEditions.map((edition) => (
-                  <option key={edition} value={edition}>
-                    {edition}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Labor Version</label>
+              {loadingLaborVersions ? (
+                <div className="w-full border rounded px-3 py-2 text-gray-400">Loading labor versions...</div>
+              ) : (
+                <select
+                  value={formData.laborVersion}
+                  onChange={(e) => setFormData({ ...formData, laborVersion: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  <option value="">Latest published</option>
+                  {laborVersions.map((version) => (
+                    <option key={version.laborVersion} value={version.laborVersion}>
+                      {version.laborVersion} ({version.status})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Labor Version (Quarter)</label>
-            {loadingLaborVersions ? (
-              <div className="w-full border rounded px-3 py-2 text-gray-400">Loading labor versions...</div>
-            ) : (
-              <select
-                value={formData.laborVersion}
-                onChange={(e) => setFormData({ ...formData, laborVersion: e.target.value })}
-                className="w-full border rounded px-3 py-2"
-              >
-                <option value="">Latest published</option>
-                {laborVersions.map((version) => (
-                  <option key={version.laborVersion} value={version.laborVersion}>
-                    {version.laborVersion} ({version.status})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">ACEL Edition</label>
+              {loadingAcelEditions ? (
+                <div className="w-full border rounded px-3 py-2 text-gray-400">Loading ACEL editions...</div>
+              ) : acelEditions.length === 0 ? (
+                <div className="text-sm text-yellow-600 p-2 bg-yellow-50 rounded">No ACEL editions found.</div>
+              ) : (
+                <select
+                  value={formData.equipmentRateEdition}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      equipmentRateEdition: e.target.value,
+                      withFuelAdjustment: e.target.value ? prev.withFuelAdjustment : false,
+                    }))
+                  }
+                  className="w-full border rounded px-3 py-2"
+                >
+                  <option value="">Use master equipment rates</option>
+                  {acelEditions.map((edition) => (
+                    <option key={edition} value={edition}>
+                      {edition}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
-            <p className="text-blue-800 font-medium mb-1">Automatic Markup Calculation</p>
-            <p className="text-blue-700 text-xs">
-              OCM and CP percentages will be automatically determined based on the total project cost according to DPWH regulations.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">VAT %</label>
               <input
@@ -423,8 +421,54 @@ export default function CreateEstimateModal({
                 onChange={(e) => setFormData({ ...formData, vatPercentage: parseFloat(e.target.value) })}
                 className="w-full border rounded px-3 py-2"
               />
-              <p className="text-xs text-gray-500 mt-1">Default: 12% (Philippine tax law)</p>
             </div>
+
+            <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">With Fuel Adjustment</p>
+                  <p className="text-xs text-slate-600">Use dry ACEL rate plus current fuel and default lube price.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={formData.withFuelAdjustment}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      withFuelAdjustment: !prev.withFuelAdjustment,
+                      fuelPricePerLiter: prev.fuelPricePerLiter || DEFAULT_FUEL_PRICE,
+                    }))
+                  }
+                  disabled={!formData.equipmentRateEdition}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${formData.withFuelAdjustment ? 'bg-blue-600' : 'bg-slate-300'} ${!formData.equipmentRateEdition ? 'cursor-not-allowed opacity-50' : ''}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${formData.withFuelAdjustment ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {formData.withFuelAdjustment && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Fuel Cost / L</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.fuelPricePerLiter}
+                      onChange={(e) => setFormData({ ...formData, fuelPricePerLiter: parseFloat(e.target.value) || 0 })}
+                      className="w-full border rounded px-3 py-2"
+                    />
+                  </div>
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Default lube price applied: Php {DEFAULT_LUBE_PRICE}/L
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-900">
+            OCM and CP are still calculated automatically from total project cost.
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -441,7 +485,7 @@ export default function CreateEstimateModal({
               disabled={loading || loadingLocations || locations.length === 0 || loadingCmpdVersions}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating...' : 'Create Estimate'}
+              {loading ? 'Creating...' : 'Create Program of Works'}
             </button>
           </div>
         </form>

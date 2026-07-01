@@ -1,4 +1,5 @@
 import type { ManualPowConfigForm, StagedTemplate } from './types';
+import { normalizePart } from '@/lib/utils/dpwh-constants';
 
 interface ManualPowApiResponse<T = unknown> {
   success?: boolean;
@@ -58,7 +59,7 @@ export async function saveManualPowDraft(
   input: { name?: string; description?: string; estimateId?: string },
 ): Promise<SaveManualPowVersionResult> {
   const response = await fetch(`/api/projects/${projectId}/manual-pow`, {
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
@@ -122,7 +123,8 @@ export async function saveStagedManualPowItems(
       unitOfMeasurement: computed.unitOfMeasurement,
       outputPerHour: computed.outputPerHour,
       category: computed.category || staged.category,
-      part: staged.part || '',
+      subCategory: computed.subCategory || staged.subCategory || '',
+      part: normalizePart(staged.part || ''),
       quantity: staged.quantity,
       laborItems: computed.laborComputed,
       equipmentItems: computed.equipmentComputed,
@@ -183,6 +185,13 @@ export async function recomputeManualPowItems(
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        payItemNumber: computed.payItemNumber,
+        payItemDescription: computed.payItemDescription,
+        unitOfMeasurement: computed.unitOfMeasurement,
+        outputPerHour: computed.outputPerHour,
+        category: computed.category || '',
+        subCategory: computed.subCategory || '',
+        part: computed.part || '',
         laborComputed: computed.laborComputed,
         equipmentComputed: computed.equipmentComputed,
         materialComputed: computed.materialComputed,

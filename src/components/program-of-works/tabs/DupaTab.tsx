@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DupaItemBreakdown, DupaReportData } from '@/types/dupa';
+import { getPartKey, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { FormDUPAPage } from '../forms/FormDUPAPage';
 
 interface DupaTabProps {
@@ -30,6 +31,19 @@ const getItemKey = (item: DupaReportData['items'][number], index: number) =>
   item.dupaItemId || `${item.part}-${item.payItemNumber}-${item.payItemDescription}::${index}`;
 
 const safe = (value: number) => (Number.isFinite(value) ? value : 0);
+
+const comparePartLabels = (left: string, right: string) => {
+  const leftOrder = PART_ORDER.indexOf(getPartKey(left).replace('PART ', ''));
+  const rightOrder = PART_ORDER.indexOf(getPartKey(right).replace('PART ', ''));
+
+  if (leftOrder !== rightOrder) {
+    if (leftOrder === -1) return 1;
+    if (rightOrder === -1) return -1;
+    return leftOrder - rightOrder;
+  }
+
+  return left.localeCompare(right, undefined, { sensitivity: 'base' });
+};
 
 const LABOR_KEYS: Array<{ label: string; field: string }> = [
   { label: 'Foreman', field: 'foreman' },
@@ -78,7 +92,7 @@ function recomputeItem(item: EditableItem): EditableItem {
   const laborSubmitted = laborItems.reduce((sum, row) => sum + row.amount, 0);
   const equipmentSubmitted = equipmentItems.reduce((sum, row) => sum + row.amount, 0);
   const directCostSubmitted = laborSubmitted + equipmentSubmitted;
-  const outputSubmitted = item.outputPerHour > 0 ? item.outputPerHour : 1;
+  const outputSubmitted = item.outputPerHour > 0 ? item.outputPerHour : 0;
   const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
   const materialsSubmitted = materialItems.reduce((sum, row) => sum + row.amount, 0);
   const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
@@ -143,7 +157,10 @@ export function DupaTab({
     [data.items],
   );
 
-  const partOptions = useMemo(() => Array.from(new Set(keyedItems.map((entry) => entry.item.part))).sort(), [keyedItems]);
+  const partOptions = useMemo(
+    () => Array.from(new Set(keyedItems.map((entry) => entry.item.part))).sort(comparePartLabels),
+    [keyedItems],
+  );
 
   const filteredItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -423,11 +440,14 @@ export function DupaTab({
                         onClick={() => changeSelectedItem(entry.key)}
                         className={`w-full px-3 py-2 text-left transition ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-gray-800">{entry.item.part} · {entry.item.payItemNumber}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">{entry.item.payItemNumber}</p>
+                            <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{entry.item.payItemDescription}</p>
+                            <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">{entry.item.part}</p>
+                          </div>
                           {isAdjusted && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">ADJ</span>}
                         </div>
-                        <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{entry.item.payItemDescription}</p>
                       </button>
                     </li>
                   );

@@ -17,7 +17,7 @@ import CreateEstimateModal from '@/components/cost-estimates/CreateEstimateModal
 import type { ProjectBoqItem } from '@/components/program-of-works/manual-pow/types';
 import { recomputeManualPowItems } from '@/components/program-of-works/manual-pow/services';
 import type { DupaReportData } from '@/types/dupa';
-import { derivePartLabel, normalizePart } from '@/lib/utils/dpwh-constants';
+import { getPartKey, normalizePart, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { fetchJsonDedup } from '@/lib/utils/fetch-json-dedup';
 
 const ProgramOfWorksItemizedTable = dynamic(() => import('@/components/program-of-works/ProgramOfWorksItemizedTable'), {
@@ -74,6 +74,8 @@ interface Project {
   manualPowConfig?: {
     laborLocation?: string;
     cmpdVersion?: string;
+    equipmentRateEdition?: string;
+    equipmentRateMode?: 'fixed' | 'variable_fuel_lube';
     laborVersion?: string;
     district?: string;
     vatPercentage?: number;
@@ -169,8 +171,8 @@ const recomputeDupaTotals = (
   const laborSubmitted = normalizedLabor.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
   const equipmentSubmitted = normalizedEquipment.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
   const directCostSubmitted = laborSubmitted + equipmentSubmitted;
-  const outputSubmitted = toNumber(item.outputPerHour, 1) > 0 ? toNumber(item.outputPerHour, 1) : 1;
-  const directUnitCostSubmitted = directCostSubmitted / outputSubmitted;
+  const outputSubmitted = toNumber(item.outputPerHour, 0) > 0 ? toNumber(item.outputPerHour, 0) : 0;
+  const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
   const materialsSubmitted = normalizedMaterials.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
   const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
   const ocmPercent = toNumber(percentSource?.ocmPercent, toNumber(item.totals?.ocmPercent, 0));
@@ -608,7 +610,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       payItemDescription: item.payItemDescription,
       unit: item.unitOfMeasurement,
       quantity,
-      part: derivePartLabel(item.part, item.payItemNumber),
+      part: normalizePart(item.part) || 'UNASSIGNED PART',
       laborCost: laborPerUnit * quantity,
       equipmentCost: equipmentPerUnit * quantity,
       materialCost: materialPerUnit * quantity,
@@ -905,6 +907,13 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     () => applyEstimateAdjustments(activeEstimateBase, powAdjustments),
     [activeEstimateBase, powAdjustments],
   );
+  const activeCmpdVersion = activeEstimate?.cmpdVersion || project?.manualPowConfig?.cmpdVersion || project?.cmpdVersion || 'N/A';
+  const activeLaborVersion = activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || 'Latest';
+  const activeEquipmentRateEdition = activeEstimate?.equipmentRateEdition || project?.manualPowConfig?.equipmentRateEdition || '';
+  const activeEquipmentRateMode = activeEstimate?.equipmentRateMode || project?.manualPowConfig?.equipmentRateMode || 'fixed';
+  const activeEquipmentRateLabel = activeEquipmentRateEdition
+    ? `${activeEquipmentRateMode === 'variable_fuel_lube' ? 'ACEL Adjusted' : 'ACEL Fixed'}: ${activeEquipmentRateEdition}`
+    : 'ACEL: Master Equipment Rates';
 
   const equipment = useMemo(() => (activeEstimate ? transformToEquipment(activeEstimate) : []), [activeEstimate]);
   const expenditureBreakdown = useMemo(
@@ -944,11 +953,11 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     filteredLines.forEach((line: any) => {
       const lineIndex = lines.indexOf(line);
       const lineKey = line.lineKey || getLineKey(line, lineIndex);
-      const partKey = normalizePart(line.part);
+      const partKey = normalizePart(line.part) || 'UNASSIGNED PART';
       if (!groupsMap.has(partKey)) {
         groupsMap.set(partKey, {
           part: partKey,
-          description: partDescriptions[partKey] || 'Other Works',
+          description: partDescriptions[getPartKey(partKey)] || 'Other Works',
           items: [],
           totalAmount: 0
         });
@@ -964,6 +973,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
         id: line._id || `${partKey}-${line.payItemNumber}-${group.items.length}`,
         lineKey,
         part: partKey,
+        subGroup: getPartKey(partKey) === 'PART E' ? String((line as any).subCategory || (line as any).category || '') : '',
         itemNo: String(line.payItemNumber || ''),
         description: String(line.payItemDescription || ''),
         quantity,
@@ -977,7 +987,18 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
       group.totalAmount += totalAmount;
     });
 
-    const groups = Array.from(groupsMap.values());
+    const groups = Array.from(groupsMap.values()).sort((left, right) => {
+      const leftOrder = PART_ORDER.indexOf(getPartKey(left.part).replace('PART ', ''));
+      const rightOrder = PART_ORDER.indexOf(getPartKey(right.part).replace('PART ', ''));
+
+      if (leftOrder !== rightOrder) {
+        if (leftOrder === -1) return 1;
+        if (rightOrder === -1) return -1;
+        return leftOrder - rightOrder;
+      }
+
+      return left.part.localeCompare(right.part, undefined, { sensitivity: 'base' });
+    });
     return { groups, total };
   }, [activeEstimate, itemSearch]);
   const signatories = useMemo<Signatory[]>(() => ([
@@ -1191,38 +1212,41 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200 px-4 py-2 flex flex-wrap gap-2 items-center justify-between">
+          <div className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 px-4 py-1.5 backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <Link
                 href={`/projects/${projectId}?tab=estimates`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
               >
                 <span aria-hidden>←</span>
                 <span>Back to Project Details</span>
               </Link>
-              <h1 className="text-lg font-bold text-gray-900 mt-1">{project?.projectName || 'Program of Works'}</h1>
-              <p className="text-xs text-gray-600 mt-0.5">
+              <h1 className="mt-0.5 text-base font-bold text-gray-900">{project?.projectName || 'Program of Works'}</h1>
+              <p className="text-xs text-gray-600">
                 {project?.projectLocation || 'Location not specified'}
                 <span className="mx-1.5 text-gray-400">•</span>
-                Active Section: {activeSectionConfig?.label || 'Overview'}
+                {activeSection === 'dupa-analysis' ? 'Detailed Unit Price Analysis' : `Active Section: ${activeSectionConfig?.label || 'Overview'}`}
               </p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                <span className={`px-2 py-0.5 rounded-full font-semibold ${isManualWorkspace ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {isManualWorkspace ? 'Manual Workspace' : 'Legacy BOQ Workspace'}
-                </span>
+              <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
                 {!canModifyPow && (
-                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
                     Read-only Mode
                   </span>
                 )}
-                {activeEstimate?.estimateName && (
-                  <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                    {activeEstimate.estimateName}
-                  </span>
+                {activeSection === 'dupa-analysis' && (
+                  <>
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
+                      CMPD: {activeCmpdVersion}
+                    </span>
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                      Labor: {activeLaborVersion}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 font-medium ${activeEquipmentRateMode === 'variable_fuel_lube' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                      {activeEquipmentRateLabel}
+                    </span>
+                  </>
                 )}
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
-                  {formatCurrency(activeEstimate?.costSummary?.grandTotal || 0)}
-                </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1230,7 +1254,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                 <select
                   value={selectedEstimateId || ''}
                   onChange={(e) => handleEstimateChange(e.target.value)}
-                  className="max-w-[18rem] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                  className="max-w-[16rem] rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700"
                   title="Switch active estimate"
                 >
                   {estimates.map((estimate) => (
@@ -1243,14 +1267,14 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
               <button
                 type="button"
                 onClick={() => handleSectionClick('reports')}
-                className="inline-flex items-center gap-2 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
               >
                 Reports
               </button>
               <button
                 type="button"
                 onClick={() => handleSectionClick('dupa-analysis')}
-                className="inline-flex items-center gap-2 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
               >
                 DUPA Analysis
               </button>
@@ -1265,10 +1289,22 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                   New Program of Works
                 </button>
               )}
+              {activeSection === 'dupa-analysis' && isManualWorkspace && canModifyPow && (
+                <button
+                  type="button"
+                  onClick={handleRecomputeDupaFromManualItems}
+                  disabled={dupaRecomputing || !manualBoqItems.length}
+                  className="rounded-md border border-indigo-300 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={manualBoqItems.length ? 'Recompute costs from current labor/CMPD settings' : 'No manual BOQ items to recompute'}
+                >
+                  {dupaRecomputing ? 'Recomputing...' : 'Recompute Costs'}
+                </button>
+              )}
+            </div>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-3">
             {adjustmentNotice && (
               <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
                 {adjustmentNotice}
@@ -1471,33 +1507,6 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
 
                 {activeSection === 'dupa-analysis' && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-base font-semibold text-gray-900">Detailed Unit Price Analysis</h2>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
-                            CMPD: {activeEstimate?.cmpdVersion || project?.manualPowConfig?.cmpdVersion || project?.cmpdVersion || 'N/A'}
-                          </span>
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                            Labor: {activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || 'Latest'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isManualWorkspace && canModifyPow && (
-                          <button
-                            type="button"
-                            onClick={handleRecomputeDupaFromManualItems}
-                            disabled={dupaRecomputing || !manualBoqItems.length}
-                            className="rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            title={manualBoqItems.length ? 'Recompute costs from current labor/CMPD settings' : 'No manual BOQ items to recompute'}
-                          >
-                            {dupaRecomputing ? 'Recomputing...' : 'Recompute Costs'}
-                          </button>
-                        )}
-                        <span className="text-xs text-gray-500">Compact screen view</span>
-                      </div>
-                    </div>
                     {dupaLoading ? (
                       <div className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-600">Loading DUPA analysis...</div>
                     ) : dupaError ? (
@@ -1555,10 +1564,13 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
-                            CMPD: {activeEstimate?.cmpdVersion || project?.manualPowConfig?.cmpdVersion || project?.cmpdVersion || 'N/A'}
+                            CMPD: {activeCmpdVersion}
                           </span>
                           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                            Labor: {activeEstimate?.laborVersion || project?.manualPowConfig?.laborVersion || project?.laborVersion || 'Latest'}
+                            Labor: {activeLaborVersion}
+                          </span>
+                          <span className={`rounded-full border px-2.5 py-1 font-medium ${activeEquipmentRateMode === 'variable_fuel_lube' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                            {activeEquipmentRateLabel}
                           </span>
                         </div>
                       </div>

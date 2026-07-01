@@ -88,6 +88,10 @@ const ProjectUpdateSchema = z.object({
     .object({
       laborLocation: z.string().optional(),
       cmpdVersion: z.string().optional(),
+      equipmentRateEdition: z.string().optional(),
+      equipmentRateMode: z.enum(['fixed', 'variable_fuel_lube']).optional(),
+      fuelPricePerLiter: z.number().optional(),
+      lubePricePerLiter: z.number().optional(),
       laborVersion: z.string().optional(),
       district: z.string().optional(),
       vatPercentage: z.number().optional(),

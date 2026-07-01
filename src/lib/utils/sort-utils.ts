@@ -2,7 +2,7 @@
  * Sorting utilities for Program of Works data
  */
 
-import { PART_ORDER } from './dpwh-constants';
+import { getPartKey, PART_ORDER } from './dpwh-constants';
 
 // ============================================================================
 // Generic Sort Functions
@@ -14,8 +14,8 @@ import { PART_ORDER } from './dpwh-constants';
  */
 export function sortByPart<T extends { part: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
-    const aOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-    const bOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+    const aOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+    const bOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
     if (aOrder !== -1 && bOrder !== -1) return aOrder - bOrder;
     return a.part.localeCompare(b.part);
   });
@@ -29,8 +29,8 @@ export function sortByPartAndItemNumber<T extends { part: string; itemNumber?: s
 ): T[] {
   return [...items].sort((a, b) => {
     // First sort by part
-    const aPartOrder = PART_ORDER.indexOf(a.part.replace('PART ', ''));
-    const bPartOrder = PART_ORDER.indexOf(b.part.replace('PART ', ''));
+    const aPartOrder = PART_ORDER.indexOf(getPartKey(a.part).replace('PART ', ''));
+    const bPartOrder = PART_ORDER.indexOf(getPartKey(b.part).replace('PART ', ''));
     
     if (aPartOrder !== bPartOrder) {
       if (aPartOrder === -1) return 1;
@@ -56,8 +56,8 @@ export function sortByPartAndItemNumber<T extends { part: string; itemNumber?: s
  * Returns negative if a comes before b, positive if b comes before a
  */
 export function compareParts(partA: string, partB: string): number {
-  const orderA = PART_ORDER.indexOf(partA.replace('PART ', ''));
-  const orderB = PART_ORDER.indexOf(partB.replace('PART ', ''));
+  const orderA = PART_ORDER.indexOf(getPartKey(partA).replace('PART ', ''));
+  const orderB = PART_ORDER.indexOf(getPartKey(partB).replace('PART ', ''));
   
   if (orderA !== -1 && orderB !== -1) {
     return orderA - orderB;

@@ -31,6 +31,22 @@ const InstantiateRequestSchema = z.object({
   projectCpPercentage: z.number().optional(), // Override with project-level CP %
 });
 
+function normalizeEquipmentDescription(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeMaterialDescription(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Get material price with CMPD-version-first priority.
  * Priority:
@@ -404,6 +420,7 @@ export async function POST(
     );
 
     // Instantiate equipment entries (filter out empty entries)
+    const unresolvedEquipment: string[] = [];
     const equipmentEntriesRaw = await Promise.all(
       template.equipmentTemplate
         .filter((equip: any) => equip.equipmentId || equip.description) // Only process entries with data
@@ -411,14 +428,54 @@ export async function POST(
           let hourlyRate = 0;
           let description = equip.description || '';
           let equipmentId = equip.equipmentId || null;
+          let equipment: any = null;
 
           if (equip.equipmentId) {
-            const equipment: any = await Equipment.findById(equip.equipmentId).lean();
+            equipment = await Equipment.findById(equip.equipmentId).lean();
             if (equipment) {
               hourlyRate = equipment.hourlyRate || 0;
               description = equipment.completeDescription || equipment.description || description;
               equipmentId = equipment._id;
             }
+          }
+
+          if (!equipment && description) {
+            const normalizedDescription = normalizeEquipmentDescription(description);
+            if (normalizedDescription) {
+              equipment = await Equipment.findOne({
+                $or: [
+                  { completeDescription: new RegExp(`^${normalizedDescription.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}$`, 'i') },
+                  { description: new RegExp(`^${normalizedDescription.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}$`, 'i') },
+                ],
+              }).lean();
+
+              if (!equipment) {
+                const allMatches = await Equipment.find({
+                  $or: [
+                    { completeDescription: { $exists: true, $ne: '' } },
+                    { description: { $exists: true, $ne: '' } },
+                  ],
+                })
+                  .select('description completeDescription hourlyRate')
+                  .lean();
+
+                equipment = allMatches.find((entry: any) => {
+                  const complete = normalizeEquipmentDescription(entry.completeDescription || '');
+                  const short = normalizeEquipmentDescription(entry.description || '');
+                  return complete === normalizedDescription || short === normalizedDescription;
+                }) || null;
+              }
+
+              if (equipment) {
+                hourlyRate = Number(equipment.hourlyRate || 0);
+                description = equipment.completeDescription || equipment.description || description;
+                equipmentId = equipment._id;
+              }
+            }
+          }
+
+          if ((!equipmentId || hourlyRate <= 0) && description.trim()) {
+            unresolvedEquipment.push(description.trim());
           }
           
           // Ensure we have a valid description
@@ -440,20 +497,33 @@ export async function POST(
           };
         })
     );
+
+    if (unresolvedEquipment.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Unable to resolve equipment rate for: ${Array.from(new Set(unresolvedEquipment)).join(', ')}. Update the DUPA template to link these rows to master equipment records.`,
+        },
+        { status: 422 }
+      );
+    }
     
     const equipmentEntries = equipmentEntriesRaw;
 
-    // Handle Minor Tools (10% of labor cost)
+    // Handle Minor Tools
     const laborCost = laborEntries.reduce((sum, labor) => sum + labor.amount, 0);
-    const minorToolsEntry = {
-      equipmentId: undefined,
-      description: 'Minor Tools (10% of Labor Cost)',
-      noOfUnits: 1,
-      noOfHours: 1,
-      hourlyRate: laborCost * 0.1,
-      amount: laborCost * 0.1,
-    };
-    equipmentEntries.push(minorToolsEntry);
+    if (template.includeMinorTools) {
+      const minorToolsPercentage = Number(template.minorToolsPercentage || 10);
+      const minorToolsCost = laborCost * (minorToolsPercentage / 100);
+      equipmentEntries.push({
+        equipmentId: undefined,
+        description: `Minor Tools (${minorToolsPercentage}% of Labor Cost)`,
+        noOfUnits: 1,
+        noOfHours: 1,
+        hourlyRate: minorToolsCost,
+        amount: minorToolsCost,
+      });
+    }
 
     // Instantiate material entries (filter out empty entries)
     console.log(`Instantiating materials with hauling cost per cu.m.: ₱${haulingCostPerCuM.toFixed(2)}`);
@@ -471,41 +541,99 @@ export async function POST(
     }
 
     const missingMaterials: Array<{ materialCode: string; description: string; reason: string }> = [];
+    const unresolvedMaterials: string[] = [];
 
     const materialEntries = await Promise.all(
       template.materialTemplate
-        .filter((material: any) => material.materialCode && material.description) // Only process valid materials
+        .filter((material: any) => material.materialCode || material.description)
         .map(async (material: any) => {
           let basePrice = 0;
           let materialDoc: any = null;
           let requiresCanvass = false;
+          let materialCode = String(material.materialCode || '').trim().toUpperCase();
+          let materialDescription = String(material.description || '').trim();
 
-          if (material.materialCode) {
-            // Fetch the material to check if hauling should be included
+          if (materialCode) {
             materialDoc = await Material.findOne({ 
-              materialCode: new RegExp(`^${String(material.materialCode || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+              materialCode: new RegExp(`^${materialCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+            }).lean();
+          }
+
+          if (!materialDoc && materialDescription) {
+            const normalizedDescription = normalizeMaterialDescription(materialDescription);
+            const exactRegex = new RegExp(`^${normalizedDescription.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}$`, 'i');
+            materialDoc = await Material.findOne({
+              materialDescription: exactRegex,
             }).lean();
 
+            if (!materialDoc) {
+              const materialCandidates = await Material.find({ isActive: true })
+                .select('materialCode materialDescription unit includeHauling')
+                .lean();
+
+              materialDoc = materialCandidates.find((entry: any) => {
+                const normalizedCandidate = normalizeMaterialDescription(entry.materialDescription || '');
+                return normalizedCandidate === normalizedDescription;
+              }) || null;
+            }
+
+            if (materialDoc) {
+              materialCode = String(materialDoc.materialCode || '').trim().toUpperCase();
+              materialDescription = String(materialDoc.materialDescription || materialDescription).trim();
+            }
+          }
+
+          if (materialCode) {
             // Get price with district priority and CMPD version
             const effectiveDate = validated.effectiveDate ? new Date(validated.effectiveDate) : new Date();
             const resolvedPrice = await getMaterialPrice(
-              material.materialCode,
+              materialCode,
               location,
               projectDistrict,
               effectiveDate,
               projectCmpdVersion,
-              material.description,
+              materialDescription,
             );
             if (resolvedPrice === null) {
               requiresCanvass = true;
               missingMaterials.push({
-                materialCode: String(material.materialCode || '').trim(),
-                description: String(material.description || '').trim(),
+                materialCode,
+                description: materialDescription,
                 reason: `No active CMPD/canvass price found for version ${projectCmpdVersion}`,
               });
+              unresolvedMaterials.push(materialDescription || materialCode);
               basePrice = 0;
             } else {
               basePrice = resolvedPrice;
+            }
+          } else if (materialDescription) {
+            const effectiveDate = validated.effectiveDate ? new Date(validated.effectiveDate) : new Date();
+            const resolvedPrice = await getMaterialPrice(
+              '',
+              location,
+              projectDistrict,
+              effectiveDate,
+              projectCmpdVersion,
+              materialDescription,
+            );
+
+            if (resolvedPrice === null) {
+              requiresCanvass = true;
+              missingMaterials.push({
+                materialCode: '',
+                description: materialDescription,
+                reason: `No active CMPD/canvass price found for version ${projectCmpdVersion}`,
+              });
+              unresolvedMaterials.push(materialDescription);
+              basePrice = 0;
+            } else {
+              basePrice = resolvedPrice;
+            }
+          }
+
+          if (basePrice <= 0 && materialDescription) {
+            if (materialDescription) {
+              unresolvedMaterials.push(materialDescription);
             }
           }
 
@@ -526,9 +654,9 @@ export async function POST(
           const haulingCostApplied = haulingWasAdded ? haulingCostPerCuM : 0;
           
           const result = {
-            materialCode: material.materialCode.trim(),
-            description: material.description.trim() || 'Material Item',
-            unit: material.unit.trim() || 'unit',
+            materialCode: materialCode || String(material.materialCode || '').trim(),
+            description: materialDescription || 'Material Item',
+            unit: String(material.unit || materialDoc?.unit || '').trim() || 'unit',
             quantity,
             unitCost,
             amount: isNaN(amount) ? 0 : amount,
@@ -543,6 +671,37 @@ export async function POST(
         })
     );
 
+    if (unresolvedMaterials.length > 0 || missingMaterials.length > 0) {
+      const uniqueUnresolved = Array.from(new Set(unresolvedMaterials.filter(Boolean)));
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Unable to resolve material unit cost for: ${uniqueUnresolved.join(', ')}. Link these rows to valid master materials with active CMPD/canvass prices before instantiating the DUPA template.`,
+          details: missingMaterials,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (template.includeConsumables) {
+      const consumablesPercentage = Number(template.consumablesPercentage || 10);
+      const baseMaterialCost = materialEntries.reduce((sum, item) => sum + item.amount, 0);
+      const consumablesCost = baseMaterialCost * (consumablesPercentage / 100);
+
+      materialEntries.push({
+        materialCode: '',
+        description: `Consumables (${consumablesPercentage}% of Materials Cost)`,
+        unit: 'LS',
+        quantity: 1,
+        unitCost: consumablesCost,
+        amount: consumablesCost,
+        haulingIncluded: false,
+        basePrice: consumablesCost,
+        haulingCost: 0,
+        requiresCanvass: false,
+      });
+    }
+
     // Calculate costs
     const laborCostTotal = laborEntries.reduce((sum, item) => sum + item.amount, 0);
     const equipmentCostTotal = equipmentEntries.reduce((sum, item) => sum + item.amount, 0);
@@ -551,9 +710,9 @@ export async function POST(
     // Align with DUPA worksheet math:
     // direct unit cost = (labor + equipment) / outputPerHour
     // direct + materials = direct unit cost + materials
-    const outputPerHour = Number(template.outputPerHour || 0) > 0 ? Number(template.outputPerHour) : 1;
+    const outputPerHour = Number(template.outputPerHour || 0) > 0 ? Number(template.outputPerHour) : 0;
     const directLaborEquipmentCost = laborCostTotal + equipmentCostTotal;
-    const directUnitCost = directLaborEquipmentCost / outputPerHour;
+    const directUnitCost = outputPerHour > 0 ? directLaborEquipmentCost / outputPerHour : 0;
     const directCost = directUnitCost + materialCostTotal;
     
     // Use project-level percentages if provided, otherwise fall back to template percentages
@@ -579,7 +738,9 @@ export async function POST(
       payItemDescription: template.payItemDescription,
       unitOfMeasurement: template.unitOfMeasurement,
       outputPerHour,
+      part: template.part || '',
       category: template.category,
+      subCategory: (template as any).subCategory || '',
       
       // Computed arrays with rates
       laborComputed: laborEntries,
@@ -608,10 +769,6 @@ export async function POST(
       {
         success: true,
         data: computedData,
-        warning:
-          missingMaterials.length > 0
-            ? 'Some materials have no CMPD/canvass prices and were set to zero. Update prices before final approval.'
-            : undefined,
         message: `Template instantiated successfully for location: ${location}`,
       },
       { status: 200 }

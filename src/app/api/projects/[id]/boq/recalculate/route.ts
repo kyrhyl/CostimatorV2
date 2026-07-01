@@ -235,6 +235,27 @@ export async function POST(
         });
       }
 
+      const includeConsumables = template.includeConsumables === true;
+      const consumablesPercentage = typeof template.consumablesPercentage === 'number'
+        ? template.consumablesPercentage
+        : 10;
+      const consumablesCost = includeConsumables ? materialCost * (consumablesPercentage / 100) : 0;
+      if (includeConsumables) {
+        materialItems.push({
+          materialCode: '',
+          description: `Consumables (${consumablesPercentage}% of Materials Cost)`,
+          unit: 'LS',
+          quantity: 1,
+          basePrice: consumablesCost,
+          haulingCost: 0,
+          unitCost: consumablesCost,
+          amount: consumablesCost,
+          priceSource: 'canvass' as const,
+          requiresCanvass: false,
+        });
+        materialCost += consumablesCost;
+      }
+
       const directCost = laborCost + equipmentCost + materialCost;
       const ocmCost = directCost * (template.ocmPercentage / 100);
       const cpCost = directCost * (template.cpPercentage / 100);

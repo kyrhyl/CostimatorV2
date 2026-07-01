@@ -13,8 +13,8 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    name: 'Dashboard',
-    path: '/dashboard',
+    name: 'Home',
+    path: '/',
     icon: '📊',
   },
   {
@@ -35,13 +35,8 @@ const menuItems: MenuItem[] = [
       { name: 'Materials & Prices', path: '/master/materials', icon: '🧱' },
       { name: 'Equipment', path: '/master/equipment', icon: '🚜' },
       { name: 'Labor Rates', path: '/master/labor', icon: '👷' },
-      { name: 'Pay Items', path: '/catalog', icon: '📑' },
+      { name: 'Pay Items Management', path: '/master/pay-items', icon: '📑' },
     ],
-  },
-  {
-    name: 'Reports',
-    path: '/reports',
-    icon: '📊',
   },
 ];
 

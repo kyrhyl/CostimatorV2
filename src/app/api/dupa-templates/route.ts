@@ -9,9 +9,25 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import DUPATemplate from '@/models/DUPATemplate';
+import PayItem from '@/models/PayItem';
 import { z } from 'zod';
 import { getSessionUser } from '@/lib/auth/session';
 import { buildAuditActor, logAuditEvent } from '@/lib/audit/logger';
+
+function getCanonicalPartValue(value?: string | null) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  const canonicalMatch = normalizedValue.toUpperCase().match(/^PART\s+[A-Z]/);
+  return canonicalMatch ? canonicalMatch[0] : normalizedValue;
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // Zod schemas for validation
 const LaborTemplateSchema = z.object({
@@ -55,11 +71,41 @@ const DUPATemplateSchema = z.object({
   vatPercentage: z.number().min(0).max(100).default(12),
   includeMinorTools: z.boolean().default(false),
   minorToolsPercentage: z.number().min(0).max(100).default(10),
+  includeConsumables: z.boolean().default(false),
+  consumablesPercentage: z.number().min(0).max(100).default(10),
   category: z.string().optional(),
+  subCategory: z.string().optional(),
   specification: z.string().optional(),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });
+
+async function resolvePayItemSnapshot(template: z.infer<typeof DUPATemplateSchema>) {
+  const payItemId = String(template.payItemId || '').trim();
+  if (!payItemId) {
+    return template;
+  }
+
+  const payItem = await PayItem.findById(payItemId)
+    .select('payItemNumber description unit part category subCategory trade isActive')
+    .lean();
+
+  if (!payItem) {
+    throw new Error('Selected pay item was not found');
+  }
+
+  return {
+    ...template,
+    payItemId,
+    payItemNumber: String(payItem.payItemNumber || '').trim(),
+    payItemDescription: String(payItem.description || '').trim(),
+    unitOfMeasurement: String(payItem.unit || '').trim(),
+    part: String(payItem.part || '').trim(),
+    category: String(payItem.category || '').trim() || template.category || '',
+    subCategory: String(payItem.subCategory || '').trim() || template.subCategory || '',
+    payItemSnapshotDate: new Date(),
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -68,24 +114,35 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
 
     const view = searchParams.get('view') === 'all' ? 'all' : 'common';
-    const maxLimit = view === 'all' ? 5000 : 200;
+    const maxLimit = 5000;
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50', 10), 1), maxLimit);
     const skip = (page - 1) * limit;
 
     const filter: Record<string, any> = {};
 
-    const search = searchParams.get('search');
+    const rawSearch = searchParams.get('search');
+    const search = rawSearch?.trim() || '';
     if (search) {
+      const escapedSearch = escapeRegex(search);
+      const canonicalPart = getCanonicalPartValue(search);
+
       filter.$or = [
-        { payItemNumber: { $regex: search, $options: 'i' } },
-        { payItemDescription: { $regex: search, $options: 'i' } },
+        { payItemNumber: { $regex: escapedSearch, $options: 'i' } },
+        { payItemDescription: { $regex: escapedSearch, $options: 'i' } },
+        { category: { $regex: escapedSearch, $options: 'i' } },
+        canonicalPart.startsWith('PART ')
+          ? { part: { $regex: `^${escapeRegex(canonicalPart)}(?:\\s*:.*)?$`, $options: 'i' } }
+          : { part: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
 
     const part = searchParams.get('part');
     if (part) {
-      filter.part = part;
+      const canonicalPart = getCanonicalPartValue(part);
+      filter.part = canonicalPart.startsWith('PART ')
+        ? { $regex: `^${canonicalPart}(?:\\s*:.*)?$`, $options: 'i' }
+        : canonicalPart;
     }
 
     const category = searchParams.get('category');
@@ -139,6 +196,7 @@ export async function GET(request: Request) {
       outputPerHour: 1,
       part: 1,
       category: 1,
+      subCategory: 1,
       laborTemplate: 1,
       equipmentTemplate: 1,
       materialTemplate: 1,
@@ -209,12 +267,13 @@ export async function POST(request: Request) {
     for (const template of templates) {
       try {
         const validated = DUPATemplateSchema.parse(template);
-        validatedTemplates.push(validated);
+        const resolved = await resolvePayItemSnapshot(validated);
+        validatedTemplates.push(resolved);
       } catch (validationError: any) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Validation error',
+            error: validationError.message || 'Validation error',
             details: validationError.errors,
           },
           { status: 400 }

@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/connect';
 import ProjectBOQ from '@/models/ProjectBOQ';
 import Project from '@/models/Project';
 import mongoose from 'mongoose';
+import { normalizePart } from '@/lib/utils/dpwh-constants';
 
 // GET /api/project-boq/:id
 export async function GET(
@@ -98,6 +99,13 @@ export async function PATCH(
         id,
         {
           $set: {
+            payItemNumber: body.payItemNumber,
+            payItemDescription: body.payItemDescription,
+            unitOfMeasurement: body.unitOfMeasurement,
+            outputPerHour: body.outputPerHour,
+            category: body.category,
+            subCategory: body.subCategory,
+            part: normalizePart(String(body.part || '')) || body.part || 'UNASSIGNED PART',
             laborItems: body.laborComputed,
             equipmentItems: body.equipmentComputed,
             materialItems: body.materialComputed,

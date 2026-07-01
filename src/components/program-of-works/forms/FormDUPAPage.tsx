@@ -27,6 +27,10 @@ function toInputNumber(value: number): string {
   return Number.isFinite(value) ? String(value) : '0';
 }
 
+function isConsumablesRow(row: { description?: string }) {
+  return /^consumables\s*\(/i.test(String(row.description || '').trim());
+}
+
 export function FormDUPAPage({
   report,
   item,
@@ -59,6 +63,8 @@ export function FormDUPAPage({
     `${row.description}-${row.unit}-${row.quantity}-${row.unitCost}-${index}`;
 
   const inputClass = 'w-full rounded border border-slate-300 bg-white px-1 py-[1px] text-[0.66rem] leading-tight';
+  const equipmentRateEdition = report.pricing?.equipmentRateEdition || '';
+  const equipmentRateMode = report.pricing?.equipmentRateMode || 'fixed';
 
   return (
     <A4PageWrapper pageNumber={pageNumber} orientation="portrait">
@@ -76,6 +82,15 @@ export function FormDUPAPage({
         <div><span className="font-semibold">Pay Item Description:</span> {item.payItemDescription}</div>
         <div><span className="font-semibold">Unit of Measurement:</span> {item.unitOfMeasurement}</div>
         <div><span className="font-semibold">Output per hour - As Submitted:</span> {formatNumber(item.outputPerHour)}</div>
+        {equipmentRateEdition ? (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Equipment Rate Basis:</span>
+            <span>{equipmentRateEdition}</span>
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-[0.62rem] font-semibold ${equipmentRateMode === 'variable_fuel_lube' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'}`}>
+              {equipmentRateMode === 'variable_fuel_lube' ? 'ACEL Adjusted' : 'ACEL Fixed'}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <datalist id="dupa-labor-suggestions">
@@ -231,17 +246,17 @@ export function FormDUPAPage({
               <td className="px-1 py-[1px] text-center" style={{ border: '1px solid #000' }}>
                 {editable ? (
                   <input className={inputClass} value={row.unit} onChange={(e) => onMaterialFieldChange?.(idx, 'unit', e.target.value)} />
-                ) : row.unit}
+                ) : (isConsumablesRow(row) ? '-' : row.unit)}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
                 {editable ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.quantity)} onChange={(e) => onMaterialFieldChange?.(idx, 'quantity', Number(e.target.value || 0))} />
-                ) : (row.quantity > 0 ? formatNumber(row.quantity) : '-')}
+                ) : (isConsumablesRow(row) ? '-' : (row.quantity > 0 ? formatNumber(row.quantity) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
                 {editable ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.unitCost)} onChange={(e) => onMaterialFieldChange?.(idx, 'unitCost', Number(e.target.value || 0))} />
-                ) : (row.unitCost > 0 ? formatCurrency(row.unitCost) : '-')}
+                ) : (isConsumablesRow(row) ? '-' : (row.unitCost > 0 ? formatCurrency(row.unitCost) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.amount > 0 ? formatCurrency(row.amount) : '-'}</td>
             </tr>

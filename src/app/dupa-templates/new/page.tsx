@@ -102,10 +102,21 @@ export default function NewDUPATemplatePage() {
   const filteredPayItems = selectedPart 
     ? payItemOptions.filter(p => p.part === selectedPart)
     : payItemOptions;
+  const payItemDropdownOptions = filteredPayItems.map((opt) => ({
+    value: opt._id,
+    label: `${opt.payItemNumber} - ${opt.description}${opt.unit ? ` (${opt.unit})` : ''}`,
+  }));
+  const payItemPlaceholder = loadingOptions
+    ? 'Loading pay items...'
+    : selectedPart
+      ? `Search ${selectedPart} pay items`
+      : 'Search pay items';
 
   // Minor Tools configuration
   const [includeMinorTools, setIncludeMinorTools] = useState(false);
   const [minorToolsPercentage, setMinorToolsPercentage] = useState(10);
+  const [includeConsumables, setIncludeConsumables] = useState(false);
+  const [consumablesPercentage, setConsumablesPercentage] = useState(10);
 
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -315,6 +326,11 @@ export default function NewDUPATemplatePage() {
     setIsSubmitting(true);
 
     // Basic validation
+    if (!selectedPayItemId) {
+      setError('Please select a pay item from the master pay item database');
+      setIsSubmitting(false);
+      return;
+    }
     if (!payItemNumber.trim()) {
       setError('Pay item number is required');
       setIsSubmitting(false);
@@ -347,7 +363,7 @@ export default function NewDUPATemplatePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          payItemId: selectedPayItemId || undefined,
+          payItemId: selectedPayItemId,
           payItemNumber: payItemNumber.trim(),
           payItemDescription: payItemDescription.trim(),
           unitOfMeasurement: unitOfMeasurement.trim(),
@@ -360,6 +376,8 @@ export default function NewDUPATemplatePage() {
           materialTemplate: validMaterialTemplate,
           includeMinorTools,
           minorToolsPercentage: Number(minorToolsPercentage),
+          includeConsumables,
+          consumablesPercentage: Number(consumablesPercentage),
           isActive,
         }),
       });
@@ -424,78 +442,68 @@ export default function NewDUPATemplatePage() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Pay Item (Optional)
-                </label>
-                <select
-                  value={selectedPayItemId}
-                  onChange={(e) => handlePayItemSelect(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loadingOptions}
-                >
-                  <option value="">
-                    {loadingOptions 
-                      ? 'Loading pay items...' 
-                      : selectedPart 
-                        ? `Select from ${filteredPayItems.length} items in ${selectedPart}` 
-                        : `Select from ${payItemOptions.length} pay items or enter manually below`
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                   Select Pay Item *
+                 </label>
+                 <Combobox
+                   value={selectedPayItemId}
+                   selectedLabel={selectedPayItemId ? payItemDropdownOptions.find((opt) => opt.value === selectedPayItemId)?.label : ''}
+                   options={payItemDropdownOptions}
+                   placeholder={payItemPlaceholder}
+                   disabled={loadingOptions}
+                   className="text-sm"
+                   clearable
+                   onChange={handlePayItemSelect}
+                 />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {selectedPart 
+                      ? `Showing ${filteredPayItems.length} items from ${selectedPart}. ` 
+                      : ''
                     }
-                  </option>
-                  {filteredPayItems.map((payItem) => (
-                    <option key={payItem._id} value={payItem._id}>
-                      {payItem.payItemNumber} - {payItem.description.substring(0, 80)}...
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {selectedPart 
-                    ? `Showing ${filteredPayItems.length} items from ${selectedPart}. ` 
-                    : ''
-                  }
-                  Selecting a pay item will auto-fill the fields below. Leave blank to enter manually.
-                </p>
-              </div>
+                    Pay item number, description, and unit are sourced from the master pay item database.
+                  </p>
+                </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Pay Item Number *
                 </label>
-                <input
-                  type="text"
-                  value={payItemNumber}
-                  onChange={(e) => setPayItemNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., 101(1)a"
-                  required
-                />
+                 <input
+                   type="text"
+                   value={payItemNumber}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                   placeholder="Select a pay item"
+                   required
+                   readOnly
+                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Unit of Measurement *
                 </label>
-                <input
-                  type="text"
-                  value={unitOfMeasurement}
-                  onChange={(e) => setUnitOfMeasurement(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., cu.m., sq.m., l.m."
-                  required
-                />
+                 <input
+                   type="text"
+                   value={unitOfMeasurement}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                   placeholder="Select a pay item"
+                   required
+                   readOnly
+                 />
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Pay Item Description *
                 </label>
-                <input
-                  type="text"
-                  value={payItemDescription}
-                  onChange={(e) => setPayItemDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter detailed description"
-                  required
-                />
+                 <textarea
+                   value={payItemDescription}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                   placeholder="Select a pay item"
+                   required
+                   readOnly
+                   rows={2}
+                 />
               </div>
 
               <div>
@@ -906,6 +914,44 @@ export default function NewDUPATemplatePage() {
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Standard DPWH rate is 10% of labor cost
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Consumables Configuration</h2>
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="includeConsumables"
+                  checked={includeConsumables}
+                  onChange={(e) => setIncludeConsumables(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <label htmlFor="includeConsumables" className="ml-2 text-sm font-medium text-gray-700">
+                  Include Consumables (calculated as percentage of Materials Cost)
+                </label>
+              </div>
+
+              {includeConsumables && (
+                <div className="ml-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Consumables Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={consumablesPercentage}
+                    onChange={(e) => setConsumablesPercentage(Number(e.target.value))}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Applied on top of total material cost
                   </p>
                 </div>
               )}

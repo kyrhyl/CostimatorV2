@@ -4,11 +4,13 @@ import dbConnect from '@/lib/db/connect';
 import Project from '@/models/Project';
 import ProjectBOQ from '@/models/ProjectBOQ';
 import CostEstimate from '@/models/CostEstimate';
-import { normalizePart, PART_ORDER } from '@/lib/utils/dpwh-constants';
+import DUPATemplate from '@/models/DUPATemplate';
+import DupaAdjustment from '@/models/DupaAdjustment';
+import { getPartKey, normalizePart, PART_ORDER } from '@/lib/utils/dpwh-constants';
 import { ensureEstimateLineId, makeDupaItemId, normalizePowMode } from '@/lib/utils/dupa-identity';
 
 function getPartOrder(part: string): number {
-  const key = part.replace('PART ', '').trim();
+  const key = getPartKey(part).replace('PART ', '').trim();
   const index = PART_ORDER.indexOf(key);
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
@@ -37,33 +39,35 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const mode = normalizePowMode(searchParams.get('mode'));
     const estimateId = String(searchParams.get('estimateId') || '').trim();
+    const estimateRef = mode === 'manual' ? 'manual' : estimateId;
 
     let sourceItems: any[] = [];
+    let selectedEstimate: any = null;
 
     if (mode === 'takeoff') {
-      let estimate: any = null;
       if (estimateId && mongoose.Types.ObjectId.isValid(estimateId)) {
-        estimate = await CostEstimate.findOne({ _id: estimateId, projectId: id }).lean();
+        selectedEstimate = await CostEstimate.findOne({ _id: estimateId, projectId: id }).lean();
       }
-      if (!estimate) {
-        estimate = await CostEstimate.findOne({ projectId: id }).sort({ createdAt: -1 }).lean();
+      if (!selectedEstimate) {
+        selectedEstimate = await CostEstimate.findOne({ projectId: id }).sort({ createdAt: -1 }).lean();
       }
-      const estimateLines = Array.isArray(estimate?.estimateLines) ? estimate.estimateLines : [];
+      const estimateLines = Array.isArray(selectedEstimate?.estimateLines) ? selectedEstimate.estimateLines : [];
       sourceItems = estimateLines.map((line: any, index: number) => ({
         sourceType: 'estimateLine' as const,
         sourceId: ensureEstimateLineId(line, index),
         payItemNumber: line.payItemNumber || '',
         payItemDescription: line.payItemDescription || '',
-        part: normalizePart(line.part || 'PART C'),
+        templateId: String(line.dupaTemplateId || ''),
+        part: normalizePart(line.part || '') || 'UNASSIGNED PART',
         unitOfMeasurement: line.unit || '',
-        outputPerHour: 1,
+        outputPerHour: Number(line.outputPerHour || 0),
         quantity: line.quantity || 0,
         laborItems: line.laborItems || [],
         equipmentItems: line.equipmentItems || [],
         materialItems: line.materialItems || [],
-        ocmPercentage: estimate?.ocmPercentage || 0,
-        cpPercentage: estimate?.cpPercentage || 0,
-        vatPercentage: estimate?.vatPercentage || 0,
+        ocmPercentage: selectedEstimate?.ocmPercentage || 0,
+        cpPercentage: selectedEstimate?.cpPercentage || 0,
+        vatPercentage: selectedEstimate?.vatPercentage || 0,
       }));
     } else {
       const boqItems = await ProjectBOQ.find({ projectId: id }).lean();
@@ -72,9 +76,10 @@ export async function GET(
         sourceId: String(item?._id || ''),
         payItemNumber: item.payItemNumber || '',
         payItemDescription: item.payItemDescription || '',
-        part: normalizePart(item.part || 'PART C'),
+        templateId: String(item.templateId || ''),
+        part: normalizePart(item.part || '') || 'UNASSIGNED PART',
         unitOfMeasurement: item.unitOfMeasurement || '',
-        outputPerHour: item.outputPerHour || 1,
+        outputPerHour: Number(item.outputPerHour || 0),
         quantity: item.quantity || 0,
         laborItems: item.laborItems || [],
         equipmentItems: item.equipmentItems || [],
@@ -89,9 +94,34 @@ export async function GET(
       }));
     }
 
+    const templateIds = Array.from(
+      new Set(
+        sourceItems
+          .map((item) => String(item.templateId || '').trim())
+          .filter((value) => mongoose.Types.ObjectId.isValid(value)),
+      ),
+    );
+
+    const [templates, adjustments] = await Promise.all([
+      templateIds.length
+        ? DUPATemplate.find({ _id: { $in: templateIds } }, { outputPerHour: 1 }).lean()
+        : Promise.resolve([]),
+      DupaAdjustment.find({ projectId: id, estimateRef }, { sourceType: 1, sourceId: 1, outputPerHour: 1 }).lean(),
+    ]);
+
+    const templateOutputMap = new Map(
+      templates.map((template: any) => [String(template._id), Number(template.outputPerHour || 0)]),
+    );
+    const adjustmentOutputMap = new Map(
+      adjustments.map((adjustment: any) => [
+        `${String(adjustment.sourceType || '')}:${String(adjustment.sourceId || '')}`,
+        Number(adjustment.outputPerHour || 0),
+      ]),
+    );
+
     const items = sourceItems
       .map((item) => {
-        const part = normalizePart(item.part || 'PART C');
+        const part = normalizePart(item.part || '') || 'UNASSIGNED PART';
         const dupaItemId = makeDupaItemId({
           sourceType: item.sourceType,
           sourceId: item.sourceId,
@@ -100,7 +130,16 @@ export async function GET(
         const laborSubmitted = (item.laborItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const equipmentSubmitted = (item.equipmentItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const directCostSubmitted = laborSubmitted + equipmentSubmitted;
-        const outputSubmitted = item.outputPerHour || 1;
+        const templateOutput = templateOutputMap.get(String(item.templateId || '')) || 0;
+        const adjustmentOutput = adjustmentOutputMap.get(`${item.sourceType}:${item.sourceId}`) || 0;
+        const storedOutput = Number(item.outputPerHour || 0);
+        const outputSubmitted = adjustmentOutput > 0
+          ? adjustmentOutput
+          : templateOutput > 0
+            ? templateOutput
+            : storedOutput > 0
+              ? storedOutput
+              : 0;
         const directUnitCostSubmitted = outputSubmitted > 0 ? directCostSubmitted / outputSubmitted : 0;
         const materialsSubmitted = (item.materialItems || []).reduce((sum: number, row: any) => sum + (row.amount || 0), 0);
         const directUnitPlusMaterialsSubmitted = directUnitCostSubmitted + materialsSubmitted;
@@ -142,9 +181,12 @@ export async function GET(
             amount: row.amount || 0,
           })),
           materialItems: (item.materialItems || []).map((row: any) => ({
+            materialCode: row.materialCode || '',
             description: row.description || '',
             unit: row.unit || '',
             quantity: row.quantity || 0,
+            basePrice: row.basePrice || 0,
+            haulingCost: row.haulingCost || 0,
             unitCost: row.unitCost || 0,
             amount: row.amount || 0,
           })),
@@ -205,7 +247,18 @@ export async function GET(
       approvedBy: { name: '', position: '', section: 'DPWH District Engineering Office' },
     };
 
-    return NextResponse.json({ success: true, data: { header, signatories, items } });
+    const pricing = {
+      equipmentRateEdition:
+        selectedEstimate?.equipmentRateEdition ||
+        project.manualPowConfig?.equipmentRateEdition ||
+        '',
+      equipmentRateMode:
+        selectedEstimate?.equipmentRateMode ||
+        project.manualPowConfig?.equipmentRateMode ||
+        'fixed',
+    };
+
+    return NextResponse.json({ success: true, data: { header, signatories, pricing, items } });
   } catch (error: any) {
     console.error('GET /api/projects/[id]/dupa-report error:', error);
     return NextResponse.json({ success: false, error: error.message || 'Failed to generate DUPA report' }, { status: 500 });

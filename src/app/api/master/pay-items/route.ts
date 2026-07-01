@@ -19,6 +19,10 @@ const PayItemSchema = z.object({
   payItemNumber: z.string().min(1, 'Pay item number is required'),
   description: z.string().min(1, 'Description is required'),
   unit: z.string().min(1, 'Unit is required'),
+  trade: z.string().optional(),
+  category: z.string().optional(),
+  subCategory: z.string().optional(),
+  notes: z.string().optional(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -76,7 +80,7 @@ export async function GET(request: NextRequest) {
     const active = searchParams.get('active');
     const sortBy = searchParams.get('sortBy') || 'payItemNumber';
     const order = searchParams.get('order') === 'desc' ? -1 : 1;
-    const limit = parseInt(searchParams.get('limit') || '1000');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '5000'), 5000);
     const page = parseInt(searchParams.get('page') || '1');
     const skip = (page - 1) * limit;
     

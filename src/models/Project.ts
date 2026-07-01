@@ -95,6 +95,9 @@ export interface IProject extends Document {
     laborLocation?: string;
     cmpdVersion?: string;
     equipmentRateEdition?: string;
+    equipmentRateMode?: 'fixed' | 'variable_fuel_lube';
+    fuelPricePerLiter?: number;
+    lubePricePerLiter?: number;
     laborVersion?: string;
     district?: string;
     vatPercentage?: number;

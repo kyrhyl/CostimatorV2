@@ -63,7 +63,7 @@ export interface ElementTemplate {
   type: 'beam' | 'slab' | 'column' | 'foundation';
   name: string;
   properties: Record<string, number>; // e.g., { width: 0.3, height: 0.5 }
-  dpwhItemNumber?: string; // DPWH catalog item for BOQ mapping (e.g., "900 (1) a")
+  dpwhItemNumber?: string; // DPWH pay item for BOQ mapping (e.g., "900 (1) a")
   rebarConfig?: RebarConfig;
 }
 
@@ -206,7 +206,7 @@ export interface FinishType {
   id: string;
   category: 'floor' | 'wall' | 'ceiling' | 'plaster' | 'paint';
   finishName: string;
-  dpwhItemNumberRaw: string; // must exist in catalog
+  dpwhItemNumberRaw: string; // must exist in pay item reference data
   unit: string; // must match DPWH unit
   wallHeightRule?: {
     mode: 'fullHeight' | 'fixed';
@@ -253,7 +253,7 @@ export interface WallSurfaceFinishAssignment {
 export interface RoofType {
   id: string;
   name: string;
-  dpwhItemNumberRaw: string; // must exist in catalog (e.g., "1013", "1014", "1015")
+  dpwhItemNumberRaw: string; // must exist in pay item reference data (e.g., "1013", "1014", "1015")
   unit: string; // must match DPWH unit (typically "Square Meter")
   areaBasis: 'slopeArea' | 'planArea'; // default slopeArea
   lapAllowancePercent: number; // e.g., 0.10 for 10% lap
@@ -289,7 +289,7 @@ export interface RoofPlane {
 // Truss Design (Part E - Steel Roof Trusses & Framing)
 export interface DPWHItemMapping {
   dpwhItemNumberRaw: string; // e.g., "1047 (8) a"
-  description: string; // from catalog
+  description: string; // from pay item reference data
   unit: string; // e.g., "Kilogram"
 }
 
@@ -365,7 +365,7 @@ export interface ScheduleItem {
   category: ScheduleItemCategory;
   // Legacy fields kept for compatibility
   itemName?: string;
-  dpwhItemNumberRaw: string; // must exist in catalog
+  dpwhItemNumberRaw: string; // must exist in pay item reference data
   descriptionOverride?: string; // optional custom description
   unit: string; // must match DPWH unit (e.g., "Each", "Lump Sum", "Linear Meter")
   qty: number;
@@ -529,25 +529,6 @@ export interface CalcRun {
 // ===================================
 // DPWH CATALOG
 // ===================================
-
-export interface DPWHCatalogItem {
-  itemNumber: string; // e.g., "900 (1)", "902 (1) a1" - unique identifier from DPWH catalog
-  description: string;
-  unit: string; // e.g., "Cubic Meter", "Kilogram", "Square Meter"
-  category: string; // e.g., "Concrete Works", "Reinforcing Steel", "Formwork"
-  trade: Trade; // Concrete, Rebar, or Formwork
-  subCategory?: string;
-  notes?: string;
-  part?: string; // DPWH Part (e.g., "PART A", "PART C", etc.)
-  partName?: string; // DPWH Part name (e.g., "General Requirements", "Earthwork")
-}
-
-export interface CatalogSearchParams {
-  query?: string; // search in item number or description
-  trade?: Trade;
-  category?: string;
-  limit?: number;
-}
 
 // ===================================
 // MATH LAYER INPUTS/OUTPUTS

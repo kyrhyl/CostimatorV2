@@ -42,6 +42,8 @@ interface DUPATemplate {
   vatPercentage: number;
   includeMinorTools: boolean;
   minorToolsPercentage: number;
+  includeConsumables: boolean;
+  consumablesPercentage: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -373,6 +375,16 @@ export default function ViewDUPATemplatePage() {
               <p className="mt-1 text-gray-900">
                 {template.includeMinorTools
                   ? `${template.minorToolsPercentage}%`
+                  : 'Not included'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Consumables
+              </label>
+              <p className="mt-1 text-gray-900">
+                {template.includeConsumables
+                  ? `${template.consumablesPercentage}%`
                   : 'Not included'}
               </p>
             </div>

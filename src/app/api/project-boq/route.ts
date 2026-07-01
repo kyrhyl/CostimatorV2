@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import ProjectBOQ from '@/models/ProjectBOQ';
 import Project from '@/models/Project';
+import { normalizePart } from '@/lib/utils/dpwh-constants';
 
 // GET /api/project-boq?projectId=xxx - List BOQ items for a project
 export async function GET(request: NextRequest) {
@@ -64,7 +65,10 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    
+
+    body.part = normalizePart(String(body.part || '')) || body.part || 'UNASSIGNED PART';
+    body.subCategory = String(body.subCategory || '').trim();
+
     // Log what we're receiving for debugging
     console.log('Creating BOQ item with data:', {
       projectId: body.projectId,

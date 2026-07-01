@@ -6,7 +6,7 @@ import ProjectBOQ, { IProjectBOQ } from '@/models/ProjectBOQ';
 import CostEstimate from '@/models/CostEstimate';
 import { getSessionUser, hasRequiredRole } from '@/lib/auth/session';
 import { PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
-import { derivePartLabel } from '@/lib/utils/dpwh-constants';
+import { normalizePart } from '@/lib/utils/dpwh-constants';
 
 const buildManualEstimatePayload = (items: IProjectBOQ[]) => {
   const estimateLines = items.map((item) => {
@@ -26,11 +26,14 @@ const buildManualEstimatePayload = (items: IProjectBOQ[]) => {
       payItemDescription: item.payItemDescription,
       unit: item.unitOfMeasurement,
       quantity,
-      part: derivePartLabel(item.part || undefined, item.payItemNumber),
+      part: normalizePart(item.part || '') || 'UNASSIGNED PART',
+      category: String((item as any).category || ''),
+      subCategory: String((item as any).subCategory || ''),
       laborCost: laborPerUnit * quantity,
       equipmentCost: equipmentPerUnit * quantity,
       materialCost: materialPerUnit * quantity,
       minorToolsCost: minorToolsPerUnit * quantity,
+      consumablesCost: Number((item as any).consumablesCost || 0) * quantity,
       directCost: directPerUnit * quantity,
       ocmCost: (item.ocmCost || 0) * quantity,
       cpCost: (item.cpCost || 0) * quantity,
@@ -161,6 +164,8 @@ export async function POST(
     });
 
     await costEstimate.save();
+    project.activeCostEstimateId = costEstimate._id;
+    await project.save();
 
     const responsePayload = {
       success: true,

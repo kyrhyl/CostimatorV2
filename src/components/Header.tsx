@@ -53,7 +53,7 @@ export default function Header() {
 
             {isAdmin && (
               <div className="relative group">
-                <button suppressHydrationWarning className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive('/master') || isActive('/catalog') ? 'bg-white text-blue-600 shadow-md' : 'text-white hover:bg-blue-500'}`}>
+                <button suppressHydrationWarning className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive('/master') ? 'bg-white text-blue-600 shadow-md' : 'text-white hover:bg-blue-500'}`}>
                   Master Data 
                 </button>
                 <div className="absolute left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
@@ -62,8 +62,7 @@ export default function Header() {
                   <Link href="/master/materials" className={`block px-4 py-3 text-sm hover:bg-blue-50 ${isActive('/master/materials') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}> CMPD (Materials & Prices)</Link>
                   <Link href="/master/equipment" className={`block px-4 py-3 text-sm hover:bg-blue-50 ${isActive('/master/equipment') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}> Equipment</Link>
                   <Link href="/master/labor" className={`block px-4 py-3 text-sm hover:bg-blue-50 ${isActive('/master/labor') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}> Labor Rates</Link>
-                  <div className="border-t border-gray-100"></div>
-                  <Link href="/catalog" className={`block px-4 py-3 text-sm hover:bg-blue-50 last:rounded-b-lg ${isActive('/catalog') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}> DPWH Pay Items</Link>
+                  <Link href="/master/pay-items" className={`block px-4 py-3 text-sm hover:bg-blue-50 last:rounded-b-lg ${isActive('/master/pay-items') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'}`}> Pay Items Management</Link>
                 </div>
               </div>
             )}

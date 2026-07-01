@@ -78,8 +78,11 @@ export interface IEstimateLine {
   payItemNumber: string;
   payItemDescription: string;
   unit: string;
+  outputPerHour?: number;
   quantity: number;
   part: string;  // "C", "D", "E", "F", "G"
+  category?: string;
+  subCategory?: string;
   
   // DUPA Template reference
   dupaTemplateId?: mongoose.Types.ObjectId;
@@ -90,6 +93,7 @@ export interface IEstimateLine {
   equipmentCost: number;
   materialCost: number;
   minorToolsCost: number;
+  consumablesCost: number;
   directCost: number;
   ocmCost: number;
   cpCost: number;
@@ -139,6 +143,9 @@ export interface ICostEstimate extends Document {
   district: string;
   cmpdVersion: string;               // e.g., "CMPD-2024-Q1"
   equipmentRateEdition?: string;     // e.g., "ACEL-27TH-2026W18"
+  equipmentRateMode?: 'fixed' | 'variable_fuel_lube';
+  fuelPricePerLiter?: number;
+  lubePricePerLiter?: number;
   laborVersion?: string;             // e.g., "LR-2026-Q2"
   effectiveDate: Date;               // Price snapshot date
   
@@ -251,14 +258,18 @@ const EstimateLineSchema = new Schema({
   payItemNumber: { type: String, required: true },
   payItemDescription: { type: String, required: true },
   unit: { type: String, required: true },
+  outputPerHour: { type: Number, default: 0, min: 0 },
   quantity: { type: Number, required: true, min: 0 },
   part: { type: String, required: true },
+  category: { type: String, default: '' },
+  subCategory: { type: String, default: '' },
   dupaTemplateId: { type: Schema.Types.ObjectId, ref: 'DUPATemplate' },
   dupaNotFound: { type: Boolean, default: false },
   laborCost: { type: Number, default: 0 },
   equipmentCost: { type: Number, default: 0 },
   materialCost: { type: Number, default: 0 },
   minorToolsCost: { type: Number, default: 0 },
+  consumablesCost: { type: Number, default: 0 },
   directCost: { type: Number, default: 0 },
   ocmCost: { type: Number, default: 0 },
   cpCost: { type: Number, default: 0 },
@@ -353,6 +364,21 @@ const CostEstimateSchema = new Schema<ICostEstimate>(
       trim: true,
       uppercase: true,
       index: true,
+    },
+    equipmentRateMode: {
+      type: String,
+      enum: ['fixed', 'variable_fuel_lube'],
+      default: 'fixed',
+    },
+    fuelPricePerLiter: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    lubePricePerLiter: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     laborVersion: {
       type: String,

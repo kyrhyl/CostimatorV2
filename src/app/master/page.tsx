@@ -14,7 +14,7 @@ export default function MasterDataPage() {
     },
     {
       title: 'Equipment',
-      description: 'Construction equipment catalog with rental rates and hourly costs',
+      description: 'Construction equipment reference data with rental rates and hourly costs',
       href: '/master/equipment',
       icon: '🚜',
       color: 'orange',
@@ -30,7 +30,7 @@ export default function MasterDataPage() {
     },
     {
       title: 'Pay Items',
-      description: 'DPWH Volume III pay items catalog with standard units and classifications',
+      description: 'DPWH Volume III pay items reference data with standard units and classifications',
       href: '/master/pay-items',
       icon: '📋',
       color: 'purple',

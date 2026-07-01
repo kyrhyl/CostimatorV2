@@ -46,6 +46,7 @@ const applyAdjustmentsToLines = (sourceEstimate: any, adjustments: any[]) => {
       equipmentCost: Number(line.equipmentCost || 0) * lineMultiplier,
       materialCost: Number(line.materialCost || 0) * lineMultiplier,
       minorToolsCost: Number(line.minorToolsCost || 0) * lineMultiplier,
+      consumablesCost: Number(line.consumablesCost || 0) * lineMultiplier,
     };
   });
 

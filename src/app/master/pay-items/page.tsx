@@ -10,6 +10,10 @@ interface PayItem {
   payItemNumber: string;
   description: string;
   unit: string;
+  trade?: string;
+  category?: string;
+  subCategory?: string;
+  notes?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -22,6 +26,10 @@ const emptyForm = {
   payItemNumber: '',
   description: '',
   unit: '',
+  trade: '',
+  category: '',
+  subCategory: '',
+  notes: '',
   isActive: true,
 };
 
@@ -36,7 +44,6 @@ export default function PayItemsPage() {
   const [saving, setSaving] = useState(false);
   const [editingItem, setEditingItem] = useState<PayItem | null>(null);
   const [formData, setFormData] = useState(emptyForm);
-
   useEffect(() => {
     fetchPayItems();
   }, [searchTerm, partFilter, activeFilter]);
@@ -110,6 +117,10 @@ export default function PayItemsPage() {
       payItemNumber: payItem.payItemNumber || '',
       description: payItem.description || '',
       unit: payItem.unit || '',
+      trade: payItem.trade || '',
+      category: payItem.category || '',
+      subCategory: payItem.subCategory || '',
+      notes: payItem.notes || '',
       isActive: payItem.isActive,
     });
     setShowForm(true);
@@ -153,15 +164,17 @@ export default function PayItemsPage() {
           <h1 className="text-3xl font-bold mb-2">Pay Items Management</h1>
           <p className="text-gray-600">Create, update, and remove DPWH pay items used in BOQ and cost estimation.</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
-        >
-          Add Pay Item
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          >
+            Add Pay Item
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 rounded-lg bg-white p-4 shadow-sm">
@@ -231,6 +244,9 @@ export default function PayItemsPage() {
                     <td className="px-4 py-3 align-top text-sm text-slate-700">
                       <div className="font-medium text-slate-900">{payItem.description}</div>
                       <div className="mt-1 text-xs text-slate-500">{payItem.division || 'No division'}</div>
+                      {payItem.subCategory && (
+                        <div className="mt-0.5 text-xs text-slate-400">{payItem.subCategory}</div>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-top text-sm text-slate-700">{payItem.part || '-'}</td>
                     <td className="px-4 py-3 align-top text-sm text-slate-700">{payItem.unit}</td>
@@ -269,7 +285,7 @@ export default function PayItemsPage() {
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">{editingItem ? 'Edit Pay Item' : 'Add Pay Item'}</h2>
-                <p className="mt-1 text-sm text-slate-500">Maintain the DPWH pay item catalog used across BOQ and costing workflows.</p>
+                <p className="mt-1 text-sm text-slate-500">Maintain the DPWH pay item reference data used across BOQ and costing workflows.</p>
               </div>
               <button
                 onClick={() => {
@@ -339,7 +355,7 @@ export default function PayItemsPage() {
                     value={formData.part}
                     onChange={(e) => setFormData({ ...formData, part: e.target.value })}
                     className="w-full rounded-md border border-gray-300 px-3 py-2"
-                    placeholder="e.g. PART C"
+                    placeholder="e.g. PART C: EARTHWORK"
                   />
                 </div>
                 <div>
@@ -352,6 +368,50 @@ export default function PayItemsPage() {
                     placeholder="e.g. ITEM 105"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Trade</label>
+                  <input
+                    type="text"
+                    value={formData.trade}
+                    onChange={(e) => setFormData({ ...formData, trade: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    placeholder="e.g. Concrete"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
+                  <input
+                    type="text"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    placeholder="e.g. Concrete Works"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Sub-Category</label>
+                  <input
+                    type="text"
+                    value={formData.subCategory}
+                    onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    placeholder="e.g. Formwork"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Notes</label>
+                <textarea
+                  rows={2}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Optional notes"
+                />
               </div>
 
               <label className="flex items-center gap-2 text-sm text-slate-700">

@@ -8,6 +8,7 @@ interface ItemLine {
   id: string;
   lineKey: string;
   part: string;
+  subGroup?: string;
   itemNo: string;
   description: string;
   quantity: number;
@@ -33,6 +34,10 @@ interface ProgramOfWorksItemizedTableProps {
   compact?: boolean;
   onSaveAdjustment?: (input: { lineKey: string; payItemNumber: string; quantity: number; unitCost: number; reason: string }) => Promise<void>;
   onClearAdjustment?: (lineKey: string) => Promise<void>;
+}
+
+function formatSubGroupLabel(value: string) {
+  return value.trim().toUpperCase();
 }
 
 export default function ProgramOfWorksItemizedTable({
@@ -71,6 +76,7 @@ export default function ProgramOfWorksItemizedTable({
   const flattenedRows = useMemo(() => {
     const rows: Array<
       | { kind: 'header'; key: string; group: PartGroup; partPercent: number }
+      | { kind: 'subheader'; key: string; label: string }
       | { kind: 'item'; key: string; item: ItemLine; itemPercent: number }
     > = [];
 
@@ -82,7 +88,32 @@ export default function ProgramOfWorksItemizedTable({
         partPercent: computePercentOfProjectCost(group.totalAmount, grandTotal),
       });
 
-      group.items.forEach((item) => {
+      const orderedItems = group.part.startsWith('PART E')
+        ? [...group.items].sort((left, right) => {
+            const leftGroup = String(left.subGroup || '').trim();
+            const rightGroup = String(right.subGroup || '').trim();
+            if (leftGroup !== rightGroup) {
+              if (!leftGroup) return 1;
+              if (!rightGroup) return -1;
+              return leftGroup.localeCompare(rightGroup, undefined, { sensitivity: 'base' });
+            }
+
+            return left.itemNo.localeCompare(right.itemNo, undefined, { numeric: true, sensitivity: 'base' });
+          })
+        : group.items;
+
+      let currentSubGroup = '';
+      orderedItems.forEach((item) => {
+        const nextSubGroup = group.part.startsWith('PART E') ? formatSubGroupLabel(String(item.subGroup || '')) : '';
+        if (group.part.startsWith('PART E') && nextSubGroup && nextSubGroup !== currentSubGroup) {
+          currentSubGroup = nextSubGroup;
+          rows.push({
+            kind: 'subheader',
+            key: `${group.part}-${currentSubGroup}-subheader`,
+            label: currentSubGroup,
+          });
+        }
+
         rows.push({
           kind: 'item',
           key: item.id,
@@ -193,6 +224,17 @@ export default function ProgramOfWorksItemizedTable({
                     </td>
                     <td className={`px-4 ${compact ? 'py-2' : 'py-3'} text-right text-sm font-semibold text-gray-900`}>
                       {formatPercent(row.partPercent)}
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (row.kind === 'subheader') {
+                return (
+                  <tr key={row.key} className="bg-blue-50/60">
+                    <td className={`px-4 ${compact ? 'py-2' : 'py-2.5'} text-xs font-semibold uppercase tracking-wide text-blue-700`} />
+                    <td className={`px-4 ${compact ? 'py-2' : 'py-2.5'} text-xs font-semibold uppercase tracking-wide text-blue-700`} colSpan={editable ? 7 : 6}>
+                      {formatSubGroupLabel(row.label)}
                     </td>
                   </tr>
                 );

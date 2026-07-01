@@ -9,6 +9,8 @@ export interface IEquipment extends Document {
   flywheelHorsepower?: number;
   fuelConsumptionAvgLph: number;
   lubeConsumptionAvgLph: number;
+  hourlyRate?: number;
+  rentalRate?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +48,16 @@ const EquipmentSchema = new Schema<IEquipment>(
       default: 0
     },
     lubeConsumptionAvgLph: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    hourlyRate: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    rentalRate: {
       type: Number,
       min: 0,
       default: 0

@@ -22,6 +22,11 @@ export const PART_DESCRIPTIONS: Record<string, string> = {
   'PART L': 'FLOOD AND RIVER CONTROL AND DRAINAGE',
 };
 
+const DESCRIPTION_TO_PART = Object.entries(PART_DESCRIPTIONS).reduce<Record<string, string>>((acc, [part, description]) => {
+  acc[description.toUpperCase()] = part;
+  return acc;
+}, {});
+
 // ============================================================================
 // Division Mappings
 // ============================================================================
@@ -104,35 +109,56 @@ export function getDivisionName(division: string): string {
  * Get division for a given part
  */
 export function getDivisionForPart(part: string): string {
-  return DIVISION_MAP[part] || '';
+  return DIVISION_MAP[getPartKey(part)] || '';
 }
 
 /**
  * Get description for a given part
  */
 export function getPartDescription(part: string): string {
-  return PART_DESCRIPTIONS[part] || 'Other Works';
+  return PART_DESCRIPTIONS[getPartKey(part)] || 'Other Works';
 }
 
 /**
- * Normalize part string to standard format
+ * Extract canonical part key such as "PART E"
  */
-export function normalizePart(part?: string): string {
-  const raw = (part || 'C').toString().trim().toUpperCase();
-  if (raw.startsWith('PART ')) return raw;
-  if (raw.startsWith('PART') && raw.length === 5) return `PART ${raw.slice(-1)}`;
-  if (raw.length === 1) return `PART ${raw}`;
-  return `PART ${raw}`;
+export function getPartKey(part?: string): string {
+  const raw = String(part || '').trim().toUpperCase();
+  if (!raw) {
+    return '';
+  }
+
+  const directMatch = raw.match(/^PART\s+([A-Z])/);
+  if (directMatch) {
+    return `PART ${directMatch[1]}`;
+  }
+
+  const compactMatch = raw.match(/^PART([A-Z])$/);
+  if (compactMatch) {
+    return `PART ${compactMatch[1]}`;
+  }
+
+  if (/^[A-Z]$/.test(raw)) {
+    return `PART ${raw}`;
+  }
+
+  return DESCRIPTION_TO_PART[raw] || '';
 }
 
-export function derivePartLabel(part?: string, payItemNumber?: string): string {
-  if (part && part.trim()) {
-    return normalizePart(part);
+/**
+ * Normalize part label to the Pay Item source-of-truth format
+ * Example: "PART E" -> "PART E: FINISHINGS AND OTHER CIVIL WORKS"
+ */
+export function normalizePart(part?: string): string {
+  const key = getPartKey(part);
+  if (!key) {
+    return '';
   }
-  if (!payItemNumber) {
-    return 'PART C';
-  }
-  const digits = payItemNumber.replace(/[^0-9]/g, '');
-  const firstDigit = digits.charAt(0);
-  return normalizePart(PART_PREFIX_MAP[firstDigit] || 'PART C');
+
+  const description = PART_DESCRIPTIONS[key];
+  return description ? `${key}: ${description}` : key;
+}
+
+export function derivePartLabel(part?: string): string {
+  return normalizePart(part);
 }

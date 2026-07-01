@@ -213,6 +213,7 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
 
   const roles = session?.user?.roles || [];
   const canModifyPow = roles.includes('project_creator') || roles.includes('admin') || roles.includes('master_admin');
+  const actionButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50';
 
   if (loading) {
     return (
@@ -355,76 +356,116 @@ export default function ProgramOfWorksTab({ projectId, project }: ProgramOfWorks
                   {formatDate(estimate.createdAt)}
                 </td>
                 <td className="px-3 py-2.5">
-                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <div className="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
                     <Link
                       href={getPowReportHref(estimate)}
-                      className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-blue-600 hover:text-dpwh-blue-800 text-xs px-1.5 py-1 rounded hover:bg-blue-50"
+                      className={`${actionButtonClass} hover:text-dpwh-blue-700`}
                       title="Program of Works Report"
+                      aria-label="Program of Works Report"
                     >
-                      POW Report
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6m3 6V7m3 10v-4m3 8H6a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
                     </Link>
                     <Link
                       href={`/projects/${projectId}/pow-audit?estimateId=${estimate._id}`}
-                      className="inline-flex items-center whitespace-nowrap leading-5 text-slate-700 hover:text-slate-900 text-xs px-1.5 py-1 rounded hover:bg-slate-100"
+                      className={`${actionButtonClass} hover:text-slate-900`}
                       title="Audit this version"
+                      aria-label="Audit this version"
                     >
-                      Audit Review
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6M7 4h10l2 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                      </svg>
                     </Link>
                     {!canModifyPow && (
                       <Link
                         href={`/projects/${projectId}/program-of-works?estimateId=${estimate._id}&section=overview`}
-                        className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-700 hover:text-dpwh-green-900 text-xs px-1.5 py-1 rounded hover:bg-green-50"
+                        className={`${actionButtonClass} hover:text-dpwh-green-800`}
                         title="View workspace"
+                        aria-label="View workspace"
                       >
-                        View Workspace
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
                       </Link>
                     )}
                     {canModifyPow && (
                       <>
                         <Link
                           href={`/projects/${projectId}/program-of-works?estimateId=${estimate._id}&section=overview`}
-                          className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-green-600 hover:text-dpwh-green-800 text-xs px-1.5 py-1 rounded hover:bg-green-50"
+                          className={`${actionButtonClass} hover:text-dpwh-green-700`}
                           title="Edit this version in workspace"
+                          aria-label="Edit workspace"
                         >
-                          Edit Workspace
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
                         </Link>
                         <button
                           type="button"
                           onClick={() => handleDuplicateEstimate(estimate)}
                           disabled={duplicatingEstimateId === estimate._id}
-                          className="inline-flex items-center whitespace-nowrap leading-5 text-indigo-600 hover:text-indigo-800 text-xs px-1.5 py-1 rounded hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${actionButtonClass} hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed`}
                           title="Duplicate this version"
+                          aria-label="Duplicate this version"
                         >
-                          {duplicatingEstimateId === estimate._id ? 'Duplicating...' : 'Duplicate'}
+                          {duplicatingEstimateId === estimate._id ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8a2 2 0 012 2v8m-4 0H6a2 2 0 01-2-2V7m4-4h8a2 2 0 012 2v8" />
+                            </svg>
+                          )}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleRenameEstimate(estimate)}
                           disabled={renamingEstimateId === estimate._id}
-                          className="inline-flex items-center whitespace-nowrap leading-5 text-amber-700 hover:text-amber-900 text-xs px-1.5 py-1 rounded hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${actionButtonClass} hover:text-amber-800 disabled:opacity-50 disabled:cursor-not-allowed`}
                           title="Rename this version"
+                          aria-label="Rename this version"
                         >
-                          {renamingEstimateId === estimate._id ? 'Renaming...' : 'Rename'}
+                          {renamingEstimateId === estimate._id ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          )}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleTagAsFinal(estimate)}
                           disabled={taggingFinalEstimateId === estimate._id || estimate.isFinalSubmission}
-                          className="inline-flex items-center whitespace-nowrap leading-5 text-emerald-700 hover:text-emerald-900 text-xs px-1.5 py-1 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${actionButtonClass} hover:text-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed ${estimate.isFinalSubmission ? 'text-emerald-700' : ''}`}
                           title="Tag as final submission"
+                          aria-label="Tag as final submission"
                         >
-                          {estimate.isFinalSubmission
-                            ? 'Final'
-                            : taggingFinalEstimateId === estimate._id
-                            ? 'Tagging...'
-                            : 'Tag Final'}
+                          {taggingFinalEstimateId === estimate._id ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : estimate.isFinalSubmission ? (
+                            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3.75-3.75a1 1 0 011.414-1.414l3.043 3.043 6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteEstimate(estimate._id)}
-                          className="inline-flex items-center whitespace-nowrap leading-5 text-dpwh-red-600 hover:text-dpwh-red-800 text-xs px-1.5 py-1 rounded hover:bg-red-50"
+                          className={`${actionButtonClass} hover:text-dpwh-red-700`}
                           title="Delete"
+                          aria-label="Delete"
                         >
-                          Delete
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" />
+                          </svg>
                         </button>
                       </>
                     )}

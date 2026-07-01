@@ -12,9 +12,40 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import DUPATemplate from '@/models/DUPATemplate';
+import PayItem from '@/models/PayItem';
 import mongoose from 'mongoose';
 import { getSessionUser } from '@/lib/auth/session';
 import { buildAuditActor, diffAuditFields, logAuditEvent } from '@/lib/audit/logger';
+
+async function resolvePayItemSnapshot(body: Record<string, any>) {
+  const payItemId = String(body.payItemId || '').trim();
+  if (!payItemId) {
+    return body;
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(payItemId)) {
+    throw new Error('Invalid pay item selection');
+  }
+
+  const payItem = await PayItem.findById(payItemId)
+    .select('payItemNumber description unit part category subCategory')
+    .lean();
+
+  if (!payItem) {
+    throw new Error('Selected pay item was not found');
+  }
+
+  return {
+    ...body,
+    payItemId,
+    payItemNumber: String(payItem.payItemNumber || '').trim(),
+    payItemDescription: String(payItem.description || '').trim(),
+    unitOfMeasurement: String(payItem.unit || '').trim(),
+    part: String(payItem.part || '').trim(),
+    category: String(payItem.category || '').trim() || String(body.category || '').trim(),
+    subCategory: String(payItem.subCategory || '').trim() || String(body.subCategory || '').trim(),
+  };
+}
 
 export async function GET(
   request: Request,
@@ -75,7 +106,15 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
+    const incomingBody = await request.json();
+    const resolvedBody = await resolvePayItemSnapshot(incomingBody);
+    const body: Record<string, any> = {
+      ...resolvedBody,
+      includeMinorTools: resolvedBody.includeMinorTools === true,
+      minorToolsPercentage: Number(resolvedBody.minorToolsPercentage ?? 10),
+      includeConsumables: resolvedBody.includeConsumables === true,
+      consumablesPercentage: Number(resolvedBody.consumablesPercentage ?? 10),
+    };
     
     // Check for pay item number conflict if updating
     if (body.payItemNumber) {

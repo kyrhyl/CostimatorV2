@@ -48,6 +48,10 @@ function validateInput<T>(schema: z.ZodSchema<T>, data: unknown) {
   }
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ============================================================================
 // API Routes
 // ============================================================================
@@ -95,11 +99,11 @@ export async function GET(request: NextRequest) {
     }
     
     if (location) {
-      query.location = { $regex: location, $options: 'i' };
+      query.location = { $regex: escapeRegex(location), $options: 'i' };
     }
     
     if (district) {
-      query.district = { $regex: district, $options: 'i' };
+      query.district = district;
     }
     
     if (cmpd_version) {
@@ -114,10 +118,17 @@ export async function GET(request: NextRequest) {
       query.isActive = isActive === 'true';
     }
     
-    if (search) {
+    if (search?.trim()) {
+      const searchPattern = escapeRegex(search.trim());
       query.$or = [
-        { description: { $regex: search, $options: 'i' } },
-        { materialCode: { $regex: search, $options: 'i' } }
+        { description: { $regex: searchPattern, $options: 'i' } },
+        { materialCode: { $regex: searchPattern, $options: 'i' } },
+        { district: { $regex: searchPattern, $options: 'i' } },
+        { location: { $regex: searchPattern, $options: 'i' } },
+        { cmpd_version: { $regex: searchPattern, $options: 'i' } },
+        { brand: { $regex: searchPattern, $options: 'i' } },
+        { specification: { $regex: searchPattern, $options: 'i' } },
+        { supplier: { $regex: searchPattern, $options: 'i' } }
       ];
     }
     

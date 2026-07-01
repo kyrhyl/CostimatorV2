@@ -74,12 +74,16 @@ export interface IDUPATemplate extends Document {
   // Minor Tools configuration
   includeMinorTools: boolean;
   minorToolsPercentage: number;
+  includeConsumables: boolean;
+  consumablesPercentage: number;
   
   // Template metadata
-  part?: string;                // e.g., "PART C", "PART D" (from PayItem)
+  part?: string;                // e.g., "PART C: EARTHWORK" (from PayItem, full format)
   category?: string;
+  subCategory?: string;
   specification?: string;
   notes?: string;
+  payItemSnapshotDate?: Date;   // When this template was last synced with PayItem
   isActive: boolean;
   isPinnedCommon: boolean;
   
@@ -147,11 +151,23 @@ const dupaTemplateSchema = new Schema<IDUPATemplate>(
       type: Number,
       default: 10
     },
+    includeConsumables: {
+      type: Boolean,
+      default: false
+    },
+    consumablesPercentage: {
+      type: Number,
+      default: 10
+    },
     part: {
       type: String,
       default: ''
     },
     category: {
+      type: String,
+      default: ''
+    },
+    subCategory: {
       type: String,
       default: ''
     },
@@ -162,6 +178,10 @@ const dupaTemplateSchema = new Schema<IDUPATemplate>(
     notes: {
       type: String,
       default: ''
+    },
+    payItemSnapshotDate: {
+      type: Date,
+      required: false,
     },
     isActive: {
       type: Boolean,
@@ -207,4 +227,17 @@ dupaTemplateSchema.pre('findOneAndUpdate', function() {
 
 });
 
-export default mongoose.models.DUPATemplate || mongoose.model<IDUPATemplate>('DUPATemplate', dupaTemplateSchema);
+const existingDupaTemplateModel = mongoose.models.DUPATemplate as mongoose.Model<IDUPATemplate> | undefined;
+
+const needsSchemaRefresh = Boolean(
+  existingDupaTemplateModel && (
+    !existingDupaTemplateModel.schema.path('includeConsumables') ||
+    !existingDupaTemplateModel.schema.path('consumablesPercentage')
+  )
+);
+
+if (needsSchemaRefresh) {
+  delete mongoose.models.DUPATemplate;
+}
+
+export default (mongoose.models.DUPATemplate as mongoose.Model<IDUPATemplate>) || mongoose.model<IDUPATemplate>('DUPATemplate', dupaTemplateSchema);

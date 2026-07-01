@@ -9,6 +9,17 @@ const __dirname = path.dirname(__filename);
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/upa-estimating';
 
+// Full part name mapping (from dpwhClassification.ts)
+const PART_FULL_NAMES = {
+  'PART A': 'PART A: GENERAL',
+  'PART B': 'PART B: OTHER GENERAL REQUIREMENTS',
+  'PART C': 'PART C: EARTHWORK',
+  'PART D': 'PART D: REINFORCED CONCRETE / BUILDINGS',
+  'PART E': 'PART E: FINISHINGS AND OTHER CIVIL WORKS',
+  'PART F': 'PART F: ELECTRICAL',
+  'PART G': 'PART G: MECHANICAL',
+};
+
 // Simple CSV parser
 function parseCSV(content) {
   const lines = content.split('\n');
@@ -61,7 +72,7 @@ function parseCSV(content) {
   return data;
 }
 
-// PayItem Schema
+// PayItem Schema (full, matching PayItem.ts model)
 const PayItemSchema = new mongoose.Schema({
   division: { type: String, required: false, trim: true, index: true },
   part: { type: String, required: true, trim: true, index: true },
@@ -69,6 +80,12 @@ const PayItemSchema = new mongoose.Schema({
   payItemNumber: { type: String, required: true, unique: true, trim: true, index: true },
   description: { type: String, required: true, trim: true },
   unit: { type: String, required: true, trim: true },
+  trade: { type: String, required: false, trim: true },
+  category: { type: String, required: false, trim: true },
+  subCategory: { type: String, required: false, trim: true },
+  notes: { type: String, required: false, trim: true },
+  lastSyncedAt: { type: Date, required: false },
+  overriddenFields: { type: [String], required: false, default: [] },
   isActive: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 
@@ -97,15 +114,20 @@ async function importPayItems() {
     // Transform and insert pay items
     console.log('💾 Inserting pay items...');
     
-    const payItems = records.map(record => ({
-      division: record.Division,
-      part: record.Part,
-      item: record.Item,
-      payItemNumber: record['Pay Item'],
-      description: record.Description,
-      unit: record.Unit,
-      isActive: true,
-    })).filter(item => {
+    const payItems = records.map(record => {
+      const shortPart = record.Part || '';
+      const fullPart = PART_FULL_NAMES[shortPart] || shortPart;
+      return {
+        division: record.Division,
+        part: fullPart,
+        item: record.Item,
+        payItemNumber: record['Pay Item'],
+        description: record.Description,
+        unit: record.Unit,
+        isActive: true,
+        lastSyncedAt: new Date(),
+      };
+    }).filter(item => {
       const isValid = item.payItemNumber && item.description;
       if (!isValid && item.part === 'PART B') {
         console.log('PART B item filtered out:', item);
