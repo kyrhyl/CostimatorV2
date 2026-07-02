@@ -76,13 +76,6 @@ Manual POW management is implemented in:
 
 This area is separate from prescribed report rendering and handles manual BOQ staging/version flows.
 
-## Public Exports
-
-`src/components/program-of-works/index.ts` exports:
-
-- `ProgramOfWorksForm` (canonical entry)
-- Reusable dashboard cards/components used by project screens
-
 ## Migration Notes (Legacy Removal)
 
 The following legacy components/routes were removed or decommissioned in this refactor cycle:
@@ -91,7 +84,6 @@ The following legacy components/routes were removed or decommissioned in this re
 - `src/components/program-of-works/ProgramOfWorksReport.tsx`
 - `src/app/program-of-works-example/page.tsx`
 - `src/app/estimate/[id]/program-of-works-report/page.tsx`
-- `src/app/cost-estimates/[id]/program-of-works-report/page.tsx`
 
 Use `src/app/projects/[id]/pow-report/page.tsx` as the only supported prescribed-forms route.
 

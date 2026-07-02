@@ -4,7 +4,7 @@ import { getToken } from 'next-auth/jwt';
 import { MASTER_ADMIN_ROLES, PROJECT_READ_ROLES, PROJECT_WRITE_ROLES } from '@/lib/auth/roles';
 
 const AUTH_EXEMPT_PATHS = ['/auth/signin', '/forbidden'];
-const PROJECT_APP_PATHS = ['/dupa-templates', '/estimate', '/takeoff', '/cost-estimates', '/material-prices'];
+const PROJECT_APP_PATHS = ['/dupa-templates'];
 
 function isWriteMethod(method: string) {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -17,10 +17,6 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith('/api/auth')) {
     return NextResponse.next();
-  }
-
-  if (pathname === '/estimate' || pathname.startsWith('/estimate/')) {
-    return NextResponse.redirect(new URL('/dupa-templates', request.url));
   }
 
   if (pathname === '/' || AUTH_EXEMPT_PATHS.some(path => pathname.startsWith(path))) {
