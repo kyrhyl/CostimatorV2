@@ -106,13 +106,26 @@ export function formatUnit(unit: string): string {
     'cubic meters': 'cu.m.',
     'square meter': 'sq.m.',
     'square meters': 'sq.m.',
+    'linear meter': 'l.m.',
+    'linear meters': 'l.m.',
     'kilogram': 'kg',
     'kilograms': 'kg',
     'lump sum': 'l.s.',
     'piece': 'pc',
     'pieces': 'pcs',
     'bag': 'bag',
-    'bags': 'bags'
+    'bags': 'bags',
+    'liter': 'L',
+    'liters': 'L',
+    'litre': 'L',
+    'litres': 'L',
+    'each': 'ea',
+    'set': 'set',
+    'lot': 'lot',
+    'day': 'day',
+    'days': 'days',
+    'month': 'mo.',
+    'months': 'mo.',
   };
   
   return unitMap[unit.toLowerCase()] || unit;

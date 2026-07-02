@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { findClassificationId, getCategoriesForPart, getSubCategoriesForPartCategory, type ClassificationOption } from '@/lib/classifications/client';
 
 interface PayItem {
   _id: string;
+  classificationId?: string;
   division: string;
   part: string;
   item: string;
@@ -20,6 +23,7 @@ interface PayItem {
 }
 
 const emptyForm = {
+  classificationId: '',
   division: '',
   part: '',
   item: '',
@@ -35,6 +39,7 @@ const emptyForm = {
 
 export default function PayItemsPage() {
   const [payItems, setPayItems] = useState<PayItem[]>([]);
+  const [classifications, setClassifications] = useState<ClassificationOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +52,22 @@ export default function PayItemsPage() {
   useEffect(() => {
     fetchPayItems();
   }, [searchTerm, partFilter, activeFilter]);
+
+  useEffect(() => {
+    fetchClassifications();
+  }, []);
+
+  const fetchClassifications = async () => {
+    try {
+      const response = await fetch('/api/master/pay-item-classifications');
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setClassifications(Array.isArray(result.data) ? result.data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch classifications', err);
+    }
+  };
 
   const fetchPayItems = async () => {
     try {
@@ -64,7 +85,18 @@ export default function PayItemsPage() {
       }
 
       if (result.success) {
-        setPayItems(Array.isArray(result.data) ? result.data : []);
+        setPayItems(
+          Array.isArray(result.data)
+            ? result.data.map((item: any) => ({
+                ...item,
+                classificationId: item.classificationId?._id || item.classificationId || '',
+              })).sort((a: PayItem, b: PayItem) => {
+                const partCmp = (a.part || '').localeCompare(b.part || '');
+                if (partCmp !== 0) return partCmp;
+                return (a.payItemNumber || '').localeCompare(b.payItemNumber || '');
+              })
+            : [],
+        );
         setError('');
       } else {
         setError(result.error || 'Failed to fetch pay items');
@@ -97,7 +129,7 @@ export default function PayItemsPage() {
       if (result.success) {
         resetForm();
         setShowForm(false);
-        await fetchPayItems();
+        await Promise.all([fetchPayItems(), fetchClassifications()]);
       } else {
         alert(result.error || 'Failed to save pay item');
       }
@@ -111,6 +143,7 @@ export default function PayItemsPage() {
   const handleEdit = (payItem: PayItem) => {
     setEditingItem(payItem);
     setFormData({
+      classificationId: payItem.classificationId || '',
       division: payItem.division || '',
       part: payItem.part || '',
       item: payItem.item || '',
@@ -152,10 +185,16 @@ export default function PayItemsPage() {
     setFormData(emptyForm);
   };
 
-  const partOptions = useMemo(
+  const filterPartOptions = useMemo(
     () => [...new Set(payItems.map((item) => String(item.part || '').trim()).filter(Boolean))].sort(),
     [payItems]
   );
+  const formPartOptions = useMemo(
+    () => [...new Set([...payItems.map((item) => String(item.part || '').trim()), ...classifications.map((item) => String(item.part || '').trim())].filter(Boolean))].sort(),
+    [payItems, classifications]
+  );
+  const categoryOptions = useMemo(() => getCategoriesForPart(classifications, formData.part), [classifications, formData.part]);
+  const subCategoryOptions = useMemo(() => getSubCategoriesForPartCategory(classifications, formData.part, formData.category), [classifications, formData.part, formData.category]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -165,6 +204,12 @@ export default function PayItemsPage() {
           <p className="text-gray-600">Create, update, and remove DPWH pay items used in BOQ and cost estimation.</p>
         </div>
         <div className="flex gap-3">
+          <Link
+            href="/master/pay-item-classifications"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Manage Classifications
+          </Link>
           <button
             onClick={() => {
               resetForm();
@@ -192,7 +237,7 @@ export default function PayItemsPage() {
             className="w-full rounded-md border border-gray-300 px-3 py-2"
           >
             <option value="">All parts</option>
-            {partOptions.map((part) => (
+            {filterPartOptions.map((part) => (
               <option key={part} value={part}>
                 {part}
               </option>
@@ -220,7 +265,7 @@ export default function PayItemsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Code</th>
+                <th className="w-44 whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Code</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Description</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Part</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Unit</th>
@@ -240,7 +285,7 @@ export default function PayItemsPage() {
               ) : (
                 payItems.map((payItem) => (
                   <tr key={payItem._id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 align-top font-semibold text-slate-900">{payItem.payItemNumber}</td>
+                    <td className="w-44 whitespace-nowrap px-4 py-3 align-top font-semibold text-slate-900">{payItem.payItemNumber}</td>
                     <td className="px-4 py-3 align-top text-sm text-slate-700">
                       <div className="font-medium text-slate-900">{payItem.description}</div>
                       <div className="mt-1 text-xs text-slate-500">{payItem.division || 'No division'}</div>
@@ -349,14 +394,17 @@ export default function PayItemsPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Part</label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={formData.part}
-                    onChange={(e) => setFormData({ ...formData, part: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, part: e.target.value, category: '', subCategory: '', classificationId: '' })}
                     className="w-full rounded-md border border-gray-300 px-3 py-2"
-                    placeholder="e.g. PART C: EARTHWORK"
-                  />
+                  >
+                    <option value="">Select part</option>
+                    {formPartOptions.map((part) => (
+                      <option key={part} value={part}>{part}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Item</label>
@@ -383,23 +431,46 @@ export default function PayItemsPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) => {
+                      const nextCategory = e.target.value;
+                      setFormData({
+                        ...formData,
+                        category: nextCategory,
+                        subCategory: '',
+                        classificationId: findClassificationId(classifications, formData.part, nextCategory, ''),
+                      });
+                    }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2"
-                    placeholder="e.g. Concrete Works"
-                  />
+                    disabled={!formData.part}
+                  >
+                    <option value="">Select category</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Sub-Category</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.subCategory}
-                    onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
+                    onChange={(e) => {
+                      const nextSubCategory = e.target.value;
+                      setFormData({
+                        ...formData,
+                        subCategory: nextSubCategory,
+                        classificationId: findClassificationId(classifications, formData.part, formData.category, nextSubCategory),
+                      });
+                    }}
                     className="w-full rounded-md border border-gray-300 px-3 py-2"
-                    placeholder="e.g. Formwork"
-                  />
+                    disabled={!formData.part || !formData.category || subCategoryOptions.length === 0}
+                  >
+                    <option value="">{subCategoryOptions.length === 0 ? 'No sub-category' : 'Select sub-category'}</option>
+                    {subCategoryOptions.map((subCategory) => (
+                      <option key={subCategory} value={subCategory}>{subCategory}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

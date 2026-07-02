@@ -22,6 +22,7 @@ const buildManualEstimatePayload = (items: IProjectBOQ[]) => {
     const minorToolsPerUnit = Math.max(0, directPerUnit - (laborPerUnit + equipmentPerUnit + materialPerUnit));
 
     return {
+      classificationId: (item as any).classificationId,
       payItemNumber: item.payItemNumber,
       payItemDescription: item.payItemDescription,
       unit: item.unitOfMeasurement,

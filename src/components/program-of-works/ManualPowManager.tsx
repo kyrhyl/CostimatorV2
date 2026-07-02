@@ -29,6 +29,7 @@ interface ManualPowManagerProps {
     cmpdVersion?: string;
     district?: string;
     vatPercentage?: number;
+    eaoPercentage?: number;
     notes?: string;
   };
   manualItems: ProjectBoqItem[];
@@ -89,6 +90,7 @@ export default function ManualPowManager({
     laborVersion: manualConfig?.laborVersion || '',
     cmpdVersion: manualConfig?.cmpdVersion || '',
     vatPercentage: manualConfig?.vatPercentage ?? 12,
+    eaoPercentage: manualConfig?.eaoPercentage ?? 1,
     notes: manualConfig?.notes || '',
   });
 
@@ -150,6 +152,7 @@ export default function ManualPowManager({
       laborVersion: manualConfig?.laborVersion || '',
       cmpdVersion: manualConfig?.cmpdVersion || '',
       vatPercentage: manualConfig?.vatPercentage ?? 12,
+      eaoPercentage: manualConfig?.eaoPercentage ?? 1,
       notes: manualConfig?.notes || '',
     });
     setConfigError(null);

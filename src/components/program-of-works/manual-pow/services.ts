@@ -26,6 +26,7 @@ export async function saveManualPowConfig(
       cmpdVersion: configForm.cmpdVersion,
       laborVersion: configForm.laborVersion,
       vatPercentage: configForm.vatPercentage,
+      eaoPercentage: configForm.eaoPercentage,
       notes: configForm.notes,
     },
     manualPowMetadata: {
@@ -118,6 +119,7 @@ export async function saveStagedManualPowItems(
     const payload = {
       projectId,
       templateId: staged._id,
+      classificationId: computed.classificationId || staged.classificationId,
       payItemNumber: computed.payItemNumber,
       payItemDescription: computed.payItemDescription,
       unitOfMeasurement: computed.unitOfMeasurement,
@@ -128,7 +130,7 @@ export async function saveStagedManualPowItems(
       quantity: staged.quantity,
       laborItems: computed.laborComputed,
       equipmentItems: computed.equipmentComputed,
-      materialItems: computed.materialComputed,
+      materialItems: (computed.materialComputed || []).filter((m: any) => m.materialCode),
       directCost: computed.directCost,
       ocmPercentage: computed.ocmPercentage,
       ocmCost: computed.ocmCost,
@@ -188,6 +190,7 @@ export async function recomputeManualPowItems(
         payItemNumber: computed.payItemNumber,
         payItemDescription: computed.payItemDescription,
         unitOfMeasurement: computed.unitOfMeasurement,
+        classificationId: computed.classificationId || '',
         outputPerHour: computed.outputPerHour,
         category: computed.category || '',
         subCategory: computed.subCategory || '',

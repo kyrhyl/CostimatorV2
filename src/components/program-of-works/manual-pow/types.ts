@@ -2,6 +2,7 @@ export interface ProjectBoqItem {
   _id: string;
   projectId: string;
   templateId: string;
+  classificationId?: string;
   payItemNumber: string;
   payItemDescription: string;
   unitOfMeasurement: string;
@@ -31,11 +32,13 @@ export interface ManualPowConfigForm {
   cmpdVersion: string;
   laborVersion: string;
   vatPercentage: number;
+  eaoPercentage: number;
   notes: string;
 }
 
 export interface TemplateSummary {
   _id: string;
+  classificationId?: string;
   payItemNumber: string;
   payItemDescription: string;
   unitOfMeasurement: string;

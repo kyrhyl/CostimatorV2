@@ -228,12 +228,15 @@ export async function calculateEstimate(
       // No DUPA found - create placeholder line
       unmappedLines.push(payItemNumber);
       estimateLines.push({
+        classificationId: undefined,
         payItemNumber: payItemNumber,
         payItemDescription: boqLine.description || 'No DUPA template found',
         unit: boqLine.unit || 'LS',
         outputPerHour: 0,
         quantity: boqLine.quantity || 0,
         part: boqLine.part || '',
+        category: '',
+        subCategory: '',
         dupaNotFound: true,
         laborCost: 0,
         equipmentCost: 0,
@@ -287,12 +290,15 @@ export async function calculateEstimate(
     
     // Store temporarily (will add markups in second pass)
     estimateLines.push({
+      classificationId: (template as any).classificationId,
       payItemNumber: payItemNumber,
       payItemDescription: template.payItemDescription,
       unit: template.unitOfMeasurement,
       outputPerHour: Number(template.outputPerHour || 0),
       quantity,
       part: template.part || boqLine.part || '',
+      category: String((template as any).category || ''),
+      subCategory: String((template as any).subCategory || ''),
       dupaTemplateId: template._id,
       ...computed,
       // Markups will be calculated after we know total direct cost

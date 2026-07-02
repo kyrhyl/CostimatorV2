@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 import { normalizePayItemNumber } from '@/lib/costing/utils/normalize-pay-item';
 
 export interface IPayItem extends Document {
+  classificationId?: mongoose.Types.ObjectId;
   division: string;
   part: string;
   item: string;
@@ -20,6 +21,12 @@ export interface IPayItem extends Document {
 
 const PayItemSchema = new Schema<IPayItem>(
   {
+    classificationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PayItemClassification',
+      required: false,
+      index: true,
+    },
     division: {
       type: String,
       required: false,

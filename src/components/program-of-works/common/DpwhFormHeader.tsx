@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { FORM_VERSIONS, FORM_TITLES } from '@/lib/utils/dpwh-constants';
 
 interface DpwhFormHeaderProps {
@@ -40,8 +41,14 @@ export function DpwhFormHeader({ formNumber, compact = false }: DpwhFormHeaderPr
     return (
       <div className="flex items-start justify-between mb-4">
         <div className="w-20">
-          <div className="w-16 h-16 bg-slate-100 flex items-center justify-center text-[0.5rem] text-center text-slate-500 rounded border border-slate-300">
-            DPWH<br />Logo
+          <div className="w-16 h-16 bg-slate-100 flex items-center justify-center rounded border border-slate-300 overflow-hidden">
+            <Image
+              src="/dpwh_logo.png"
+              alt="DPWH Logo"
+              width={64}
+              height={64}
+              className="object-contain"
+            />
           </div>
         </div>
 
@@ -60,8 +67,14 @@ export function DpwhFormHeader({ formNumber, compact = false }: DpwhFormHeaderPr
   return (
     <div className="grid grid-cols-[70px_1fr] gap-0 mb-2">
       <div className="flex items-center justify-center">
-        <div className="w-[60px] h-[60px] bg-slate-100 flex items-center justify-center text-[0.5rem] text-center text-slate-500 rounded border border-slate-300">
-          DPWH<br/>Logo
+        <div className="w-[60px] h-[60px] bg-slate-100 flex items-center justify-center rounded border border-slate-300 overflow-hidden">
+          <Image
+            src="/dpwh_logo.png"
+            alt="DPWH Logo"
+            width={60}
+            height={60}
+            className="object-contain"
+          />
         </div>
       </div>
 

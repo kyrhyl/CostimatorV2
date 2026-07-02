@@ -689,7 +689,7 @@ export async function POST(
       const consumablesCost = baseMaterialCost * (consumablesPercentage / 100);
 
       materialEntries.push({
-        materialCode: '',
+        materialCode: 'CONSUMABLES',
         description: `Consumables (${consumablesPercentage}% of Materials Cost)`,
         unit: 'LS',
         quantity: 1,
@@ -734,6 +734,7 @@ export async function POST(
 
     // Return computed data for BOQ creation
     const computedData = {
+      classificationId: String((template as any).classificationId || ''),
       payItemNumber: template.payItemNumber,
       payItemDescription: template.payItemDescription,
       unitOfMeasurement: template.unitOfMeasurement,

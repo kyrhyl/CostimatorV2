@@ -59,6 +59,7 @@ export interface ItemizedLineItem {
   totalUnitCost: number;
   totalUnitCostEvaluated: number;
   percentDirectCost: number;
+  subGroup?: string;
 }
 
 export interface ItemizedPart {
@@ -92,6 +93,7 @@ export interface ComponentBreakdownItem {
   itemNumber: string;
   description: string;
   asSubmitted: ComponentBreakdownItemSubmitted;
+  subGroup?: string;
 }
 
 export interface ComponentBreakdownTotals {

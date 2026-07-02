@@ -16,11 +16,24 @@ import PayItem from '@/models/PayItem';
 import mongoose from 'mongoose';
 import { getSessionUser } from '@/lib/auth/session';
 import { buildAuditActor, diffAuditFields, logAuditEvent } from '@/lib/audit/logger';
+import { requiresClassification, resolveClassificationInput } from '@/lib/classifications/pay-item';
 
-async function resolvePayItemSnapshot(body: Record<string, any>) {
+async function resolvePayItemSnapshot(body: Record<string, any>): Promise<Record<string, any>> {
   const payItemId = String(body.payItemId || '').trim();
+  const fallbackClassification = await resolveClassificationInput({
+    classificationId: body.classificationId,
+    part: body.part,
+    category: body.category,
+    subCategory: body.subCategory,
+  });
   if (!payItemId) {
-    return body;
+    return {
+      ...body,
+      classificationId: fallbackClassification.classificationId || undefined,
+      part: fallbackClassification.part || body.part || '',
+      category: fallbackClassification.category,
+      subCategory: fallbackClassification.subCategory,
+    };
   }
 
   if (!mongoose.Types.ObjectId.isValid(payItemId)) {
@@ -37,6 +50,7 @@ async function resolvePayItemSnapshot(body: Record<string, any>) {
 
   return {
     ...body,
+    classificationId: String((payItem as any).classificationId || fallbackClassification.classificationId || '').trim() || undefined,
     payItemId,
     payItemNumber: String(payItem.payItemNumber || '').trim(),
     payItemDescription: String(payItem.description || '').trim(),
@@ -108,6 +122,12 @@ export async function PATCH(
 
     const incomingBody = await request.json();
     const resolvedBody = await resolvePayItemSnapshot(incomingBody);
+    if (requiresClassification(resolvedBody.part) && !String(resolvedBody.classificationId || '').trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Part E DUPA templates require a category or sub-category selection' },
+        { status: 400 }
+      );
+    }
     const body: Record<string, any> = {
       ...resolvedBody,
       includeMinorTools: resolvedBody.includeMinorTools === true,

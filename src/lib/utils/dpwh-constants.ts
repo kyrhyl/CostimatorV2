@@ -8,7 +8,7 @@
 // ============================================================================
 
 export const PART_DESCRIPTIONS: Record<string, string> = {
-  'PART A': 'GENERAL',
+  'PART A': 'FACILITIES FOR THE ENGINEER',
   'PART B': 'OTHER GENERAL REQUIREMENTS',
   'PART C': 'EARTHWORK',
   'PART D': 'REINFORCED CONCRETE / BUILDINGS',
@@ -161,4 +161,19 @@ export function normalizePart(part?: string): string {
 
 export function derivePartLabel(part?: string): string {
   return normalizePart(part);
+}
+
+/**
+ * Infer the DPWH part from a pay item number prefix.
+ * Returns the full normalized part string (e.g. "PART B: OTHER GENERAL REQUIREMENTS")
+ * or null if the item number doesn't map to an inferred part.
+ *
+ * Currently handles: B prefix -> PART B
+ */
+export function inferPartFromPayItemNumber(payItemNumber: string): string | null {
+  const trimmed = String(payItemNumber || '').trim().toUpperCase();
+  if (/^B\b/.test(trimmed)) {
+    return normalizePart('PART B');
+  }
+  return null;
 }

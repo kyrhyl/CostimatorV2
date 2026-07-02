@@ -102,6 +102,7 @@ export async function PATCH(
             payItemNumber: body.payItemNumber,
             payItemDescription: body.payItemDescription,
             unitOfMeasurement: body.unitOfMeasurement,
+            classificationId: String(body.classificationId || '').trim() || undefined,
             outputPerHour: body.outputPerHour,
             category: body.category,
             subCategory: body.subCategory,

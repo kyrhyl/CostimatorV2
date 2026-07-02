@@ -20,10 +20,10 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
       <DpwhFormHeader formNumber="13-10" />
       <ProjectInfoSection header={data.header} variant="full" />
 
-      <div className="grid grid-cols-2 gap-3 mb-2">
+      <div className="grid grid-cols-2 gap-3 mb-1">
         <div>
-          <div className="mb-0 font-semibold text-[0.65rem]">Work Location:</div>
-          <table className="w-full border border-black text-[0.65rem] mb-2">
+          <div className="mb-0 font-semibold text-[0.6rem]">Work Location:</div>
+          <table className="w-full border border-black text-[0.6rem] mb-1">
             <thead>
               <tr className="bg-gray-800 text-white">
                 <th rowSpan={2} className="border border-black px-1 py-0 align-bottom text-[0.55rem]">Project Component ID</th>
@@ -54,8 +54,8 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
               </tr>
             </tbody>
           </table>
-          <div className="mb-0 font-semibold text-[0.65rem]">Allotted Amount:</div>
-          <table className="w-full border border-black text-[0.65rem] mb-2">
+          <div className="mb-0 font-semibold text-[0.6rem]">Allotted Amount:</div>
+          <table className="w-full border border-black text-[0.6rem] mb-1">
             <thead>
               <tr className="bg-gray-800 text-white">
                 <th className="border border-black px-1 py-0 text-[0.55rem]">Project Component ID</th>
@@ -71,8 +71,8 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
           </table>
         </div>
         <div>
-          <div className="mb-0 font-semibold text-[0.65rem]">Fund Source:</div>
-          <table className="w-full border border-black text-[0.65rem] mb-2">
+          <div className="mb-0 font-semibold text-[0.6rem]">Fund Source:</div>
+          <table className="w-full border border-black text-[0.6rem] mb-1">
             <thead>
               <tr className="bg-gray-800 text-white">
                 <th className="border border-black px-1 py-0 text-[0.55rem]">Project ID</th>
@@ -88,8 +88,8 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
               </tr>
             </tbody>
           </table>
-          <div className="mb-1 font-semibold text-[0.65rem]">Physical Target:</div>
-          <table className="w-full border border-black text-[0.65rem] mb-2">
+          <div className="mb-0 font-semibold text-[0.6rem]">Physical Target:</div>
+          <table className="w-full border border-black text-[0.6rem] mb-1">
             <thead>
               <tr className="bg-gray-800 text-white">
                 <th className="border border-black px-1 py-0 text-[0.55rem]">Infra Type</th>
@@ -110,8 +110,8 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
         </div>
       </div>
 
-      <div className="mb-2 print-break-inside">
-        <table className="w-full border border-black text-[0.6rem] leading-tight">
+      <div className="mb-1 print-break-inside">
+        <table className="w-full border border-black text-[0.55rem] leading-none">
           <thead>
             <tr className="bg-gray-800 text-white">
               <th className="border border-black px-1 py-0 text-[0.55rem]">Description of Works to be Done</th>
@@ -136,15 +136,15 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
         </table>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid grid-cols-2 gap-2 mb-1">
         <div className="border border-black">
-          <div className="bg-gray-800 text-white text-[0.6rem] font-bold px-2 py-0.5">Minimum Equipment Requirement:</div>
-          <table className="w-full border-collapse text-[0.6rem]">
+          <div className="bg-gray-800 text-white text-[0.55rem] font-bold px-2 py-[0.5px] border-b border-black">Minimum Equipment Requirement:</div>
+          <table className="w-full border-collapse text-[0.55rem] border-t-0">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border border-black px-1 py-0 text-[0.55rem]">Equipment Description</th>
-                <th className="border border-black px-1 py-0 text-[0.55rem]">Capacity</th>
-                <th className="border border-black px-1 py-0 text-[0.55rem]">Number of Equipment</th>
+                <th className="border-black border-x border-b px-1 py-0 text-[0.55rem]">Equipment Description</th>
+                <th className="border-black border-r border-b px-1 py-0 text-[0.55rem]">Capacity</th>
+                <th className="border-black border-r border-b px-1 py-0 text-[0.55rem]">Number of Equipment</th>
               </tr>
             </thead>
             <tbody>
@@ -158,8 +158,8 @@ export function Form1310Page({ data, totalDirectCost, formatCurrency }: Form1310
           </table>
         </div>
         <div className="border border-black">
-          <div className="bg-gray-800 text-white text-[0.6rem] font-bold px-2 py-0.5">Breakdown of Expenditures:</div>
-          <table className="w-full border-collapse text-[0.6rem]">
+          <div className="bg-gray-800 text-white text-[0.55rem] font-bold px-2 py-[0.5px]">Breakdown of Expenditures:</div>
+          <table className="w-full border-collapse text-[0.55rem]">
             <thead>
               <tr className="bg-gray-100">
                 <th className="border border-black px-1 py-0 text-[0.55rem]">Description</th>

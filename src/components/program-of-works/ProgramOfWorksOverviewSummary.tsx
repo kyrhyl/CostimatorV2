@@ -103,7 +103,7 @@ export default function ProgramOfWorksOverviewSummary({
   const cpPercentage = directExpenditureTotal > 0 ? (cp / directExpenditureTotal) * 100 : 0;
   const vatPercentage = vatBase > 0 ? (vat / vatBase) * 100 : 0;
   const eaoPercentage = prescribedEaoPercentage ?? 1;
-  const eao = prescribedEao ?? (directExpenditureTotal * (eaoPercentage / 100));
+  const eao = prescribedEao ?? Math.round((expenditureBreakdown.totalEstimatedCost || 0) * (eaoPercentage / 100) * 100) / 100;
   const totalWithEao = (expenditureBreakdown.totalEstimatedCost || 0) + eao;
   const appropriationValue = Number(appropriation || 0);
   const balance = appropriationValue - totalWithEao;

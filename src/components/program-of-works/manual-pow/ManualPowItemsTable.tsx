@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { getPartKey, normalizePart } from '@/lib/utils/dpwh-constants';
 import type { ProjectBoqItem } from './types';
 
@@ -61,6 +61,12 @@ function normalizePartLabel(value?: string) {
   return normalizePart(value || '') || 'UNASSIGNED PART';
 }
 
+function getPartESubGroup(item: ProjectBoqItem) {
+  const partKey = getPartKey(item.part || '');
+  if (partKey !== 'PART E') return '';
+  return String(item.subCategory || item.category || '').trim();
+}
+
 interface ManualPowItemsTableProps {
   manualItems: ProjectBoqItem[];
   loading: boolean;
@@ -93,16 +99,43 @@ export default function ManualPowItemsTable({
   onDelete,
 }: ManualPowItemsTableProps) {
   const initialLoading = loading && manualItems.length === 0;
+  const partEMinItemByGroup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of manualItems) {
+      if (getPartKey(item.part || '') === 'PART E') {
+        const group = getPartESubGroup(item);
+        if (group) {
+          const existing = map.get(group);
+          if (!existing || comparePayItemNumbers(item.payItemNumber, existing) < 0) {
+            map.set(group, item.payItemNumber);
+          }
+        }
+      }
+    }
+    return map;
+  }, [manualItems]);
   const sortedItems = [...manualItems].sort((left, right) => {
     const byPart = compareParts(left.part, right.part);
-    if (byPart !== 0) {
-      return byPart;
+    if (byPart !== 0) return byPart;
+
+    const isPartE = getPartKey(left.part || '') === 'PART E' && getPartKey(right.part || '') === 'PART E';
+
+    if (isPartE) {
+      const leftGroup = getPartESubGroup(left);
+      const rightGroup = getPartESubGroup(right);
+      if (leftGroup !== rightGroup) {
+        if (!leftGroup) return 1;
+        if (!rightGroup) return -1;
+        const byGroup = comparePayItemNumbers(
+          partEMinItemByGroup.get(leftGroup) || '',
+          partEMinItemByGroup.get(rightGroup) || '',
+        );
+        if (byGroup !== 0) return byGroup;
+      }
     }
 
     const byPayItem = comparePayItemNumbers(left.payItemNumber, right.payItemNumber);
-    if (byPayItem !== 0) {
-      return byPayItem;
-    }
+    if (byPayItem !== 0) return byPayItem;
 
     return String(left.payItemDescription || '').localeCompare(String(right.payItemDescription || ''), undefined, { sensitivity: 'base' });
   });
@@ -158,12 +191,22 @@ export default function ManualPowItemsTable({
               const currentPartLabel = normalizePartLabel(item.part);
               const previousPartLabel = index > 0 ? normalizePartLabel(sortedItems[index - 1]?.part) : '';
               const showPartHeader = index === 0 || previousPartLabel !== currentPartLabel;
+              const currentSubGroup = getPartESubGroup(item);
+              const previousSubGroup = index > 0 && !showPartHeader ? getPartESubGroup(sortedItems[index - 1]) : '';
+              const showSubGroupHeader = getPartKey(item.part || '') === 'PART E' && currentSubGroup && (showPartHeader || previousSubGroup !== currentSubGroup);
               return (
                 <Fragment key={item._id}>
                   {showPartHeader && (
                     <tr key={`${item.part || 'UNPARTED'}-header`} className="bg-slate-100">
                       <td colSpan={8} className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700">
                         {currentPartLabel || 'Unassigned Part'}
+                      </td>
+                    </tr>
+                  )}
+                  {showSubGroupHeader && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={8} className="px-3 py-2 text-xs font-semibold tracking-wide text-slate-600">
+                        {currentSubGroup}
                       </td>
                     </tr>
                   )}

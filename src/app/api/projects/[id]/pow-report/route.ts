@@ -93,6 +93,8 @@ export async function GET(
         equipmentCost: Number(line.equipmentCost || 0) * quantity,
         part: line.part || '',
         partDescription: '',
+        category: line.category || '',
+        subCategory: line.subCategory || '',
         laborItems: line.laborItems || [],
         equipmentItems: line.equipmentItems || [],
         materialItems: line.materialItems || [],
@@ -122,6 +124,8 @@ export async function GET(
         equipmentCost: Number(item.equipmentCost || 0) * quantity,
         part: item.part || (item.templateId as any)?.part || '',
         partDescription: (item.templateId as any)?.category || '',
+        category: item.category || (item.templateId as any)?.category || '',
+        subCategory: item.subCategory || '',
         laborItems: item.laborItems || [],
         equipmentItems: item.equipmentItems || [],
         materialItems: item.materialItems || [],
@@ -156,6 +160,8 @@ export async function GET(
         equipmentCost: line.equipmentCost || 0,
         part: line.part || '',
         partDescription: line.partDescription || '',
+        category: line.category || '',
+        subCategory: line.subCategory || '',
         laborItems: [],
         equipmentItems: [],
         materialItems: []
@@ -255,8 +261,8 @@ export async function GET(
     const estimatedComponentCost = project.estimatedComponentCost || 0;  // NEW
 
     // Calculate EAO (Engineering & Administrative Overhead) - typically 1% of direct cost
-    const eaoPercentage = 1; // Configurable via project settings
-    const eao = totalDirectCost * (eaoPercentage / 100);  // NEW
+    const eaoPercentage = project.manualPowConfig?.eaoPercentage ?? 1;
+    const eao = Math.round(totalProjectCost * (eaoPercentage / 100) * 100) / 100;  // Based on Total Construction Cost, 2 decimal places
 
     const signatories = {
       preparedBy: { name: '', position: '', section: 'Planning and Design Section' },
@@ -362,7 +368,7 @@ function groupItemsByPart(
   return Array.from(partMap.entries())
     .map(([part, data]) => ({
       part,
-      partDescription: partDescriptions[part] || 'Other Works',
+      partDescription: partDescriptions[getPartKey(part)] || 'Other Works',
       division: getDivisionForPart(part),
       items: data.items,
       asSubmitted: data.asSubmitted,
@@ -389,6 +395,7 @@ interface DetailedLineItem {
   totalUnitCost: number;
   totalUnitCostEvaluated: number;
   percentDirectCost: number;
+  subGroup: string;
 }
 
 interface DetailedPartGroup {
@@ -439,7 +446,8 @@ function groupItemsByPartDetailed(
       directCostUnitEvaluated: unitCost,
       totalUnitCost: totalUnitCost,
       totalUnitCostEvaluated: totalUnitCost,
-      percentDirectCost: 0
+      percentDirectCost: 0,
+      subGroup: String(item.subCategory || item.category || '')
     });
     partData.partTotal += directCost;
   });
@@ -447,7 +455,7 @@ function groupItemsByPartDetailed(
   return Array.from(partMap.entries())
     .map(([part, data]) => ({
       part,
-      partDescription: partDescriptions[part] || 'Other Works',
+      partDescription: partDescriptions[getPartKey(part)] || 'Other Works',
       division: getDivisionForPart(part),
       items: data.items.map(item => ({
         ...item,
@@ -467,6 +475,7 @@ function groupItemsByPartDetailed(
 interface ComponentBreakdownItem {
   itemNumber: string;
   description: string;
+  subGroup: string;
   asSubmitted: {
     percent: number;
     quantity: number;
@@ -530,6 +539,7 @@ function groupItemsByComponentBreakdown(
     const componentItem: ComponentBreakdownItem = {
       itemNumber: item.payItemNumber || '',
       description: item.payItemDescription || '',
+      subGroup: String(item.subCategory || item.category || ''),
       asSubmitted: {
         percent: computePercentOfProjectCost(directCost, totalProjectCost),
         quantity: item.quantity || 0,
@@ -558,7 +568,7 @@ function groupItemsByComponentBreakdown(
   return Array.from(partMap.entries())
     .map(([part, data]) => ({
       part,
-      partDescription: partDescriptions[part] || 'Other Works',
+      partDescription: partDescriptions[getPartKey(part)] || 'Other Works',
       division: getDivisionForPart(part),
       items: data.items,
       totals: data.totals

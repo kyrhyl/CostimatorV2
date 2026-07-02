@@ -6,13 +6,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import PayItem from '@/models/PayItem';
+import DUPATemplate from '@/models/DUPATemplate';
 import { z } from 'zod';
+import { normalizePart, inferPartFromPayItemNumber } from '@/lib/utils/dpwh-constants';
+import { requiresClassification, resolveClassificationInput } from '@/lib/classifications/pay-item';
 
 // ============================================================================
 // Validation Schema
 // ============================================================================
 
 const UpdatePayItemSchema = z.object({
+  classificationId: z.string().optional(),
   division: z.string().min(1, 'Division is required').optional(),
   part: z.string().min(1, 'Part is required').optional(),
   item: z.string().min(1, 'Item is required').optional(),
@@ -106,18 +110,57 @@ export async function PATCH(
       }
     }
     
-    const payItem = await PayItem.findByIdAndUpdate(
-      id,
-      validation.data,
-      { new: true, runValidators: true }
-    );
-    
-    if (!payItem) {
+    const existingPayItem = await PayItem.findById(id).lean();
+    if (!existingPayItem) {
       return NextResponse.json(
         { success: false, error: 'Pay item not found' },
         { status: 404 }
       );
     }
+
+    const finalPayItemNumber = validation.data.payItemNumber || existingPayItem.payItemNumber || '';
+    const inferredPart = inferPartFromPayItemNumber(finalPayItemNumber);
+    const nextPart = inferredPart || normalizePart(String(validation.data.part || existingPayItem.part || '')) || String(validation.data.part || existingPayItem.part || '').trim();
+    const resolvedClassification = await resolveClassificationInput({
+      classificationId: validation.data.classificationId,
+      part: nextPart,
+      category: validation.data.category ?? existingPayItem.category,
+      subCategory: validation.data.subCategory ?? existingPayItem.subCategory,
+    });
+
+    if (requiresClassification(nextPart) && !resolvedClassification.classificationId) {
+      return NextResponse.json(
+        { success: false, error: 'Part E pay items require a category or sub-category selection' },
+        { status: 400 }
+      );
+    }
+
+    const payItem = await PayItem.findByIdAndUpdate(
+      id,
+      {
+        ...validation.data,
+        part: nextPart,
+        classificationId: resolvedClassification.classificationId || undefined,
+        category: resolvedClassification.category,
+        subCategory: resolvedClassification.subCategory,
+      },
+      { new: true, runValidators: true }
+    );
+
+    await DUPATemplate.updateMany(
+      { payItemId: id },
+      {
+        $set: {
+          classificationId: resolvedClassification.classificationId || undefined,
+          payItemNumber: payItem.payItemNumber,
+          payItemDescription: payItem.description,
+          unitOfMeasurement: payItem.unit,
+          part: payItem.part,
+          category: payItem.category || '',
+          subCategory: payItem.subCategory || '',
+        },
+      },
+    );
     
     return NextResponse.json({
       success: true,

@@ -101,6 +101,7 @@ export interface IProject extends Document {
     laborVersion?: string;
     district?: string;
     vatPercentage?: number;
+    eaoPercentage?: number;
     notes?: string;
   } | null;
   status: 'Planning' | 'Approved' | 'Ongoing' | 'Completed' | 'Cancelled';

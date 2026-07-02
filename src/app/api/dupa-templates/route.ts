@@ -13,6 +13,7 @@ import PayItem from '@/models/PayItem';
 import { z } from 'zod';
 import { getSessionUser } from '@/lib/auth/session';
 import { buildAuditActor, logAuditEvent } from '@/lib/audit/logger';
+import { requiresClassification, resolveClassificationInput } from '@/lib/classifications/pay-item';
 
 function getCanonicalPartValue(value?: string | null) {
   const normalizedValue = String(value || '').trim();
@@ -59,6 +60,7 @@ const OutputPerHourSchema = z
 
 const DUPATemplateSchema = z.object({
   payItemId: z.string().optional(),
+  classificationId: z.string().optional(),
   payItemNumber: z.string().min(1, 'Pay item number is required'),
   payItemDescription: z.string().min(1, 'Description is required'),
   unitOfMeasurement: z.string().min(1, 'Unit of measurement is required'),
@@ -80,10 +82,22 @@ const DUPATemplateSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-async function resolvePayItemSnapshot(template: z.infer<typeof DUPATemplateSchema>) {
+async function resolvePayItemSnapshot(template: z.infer<typeof DUPATemplateSchema>): Promise<Record<string, any>> {
   const payItemId = String(template.payItemId || '').trim();
+  const fallbackClassification = await resolveClassificationInput({
+    classificationId: template.classificationId,
+    part: (template as any).part,
+    category: template.category,
+    subCategory: template.subCategory,
+  });
   if (!payItemId) {
-    return template;
+    return {
+      ...template,
+      classificationId: fallbackClassification.classificationId || undefined,
+      part: fallbackClassification.part || (template as any).part || '',
+      category: fallbackClassification.category,
+      subCategory: fallbackClassification.subCategory,
+    };
   }
 
   const payItem = await PayItem.findById(payItemId)
@@ -96,6 +110,7 @@ async function resolvePayItemSnapshot(template: z.infer<typeof DUPATemplateSchem
 
   return {
     ...template,
+    classificationId: String((payItem as any).classificationId || fallbackClassification.classificationId || '').trim() || undefined,
     payItemId,
     payItemNumber: String(payItem.payItemNumber || '').trim(),
     payItemDescription: String(payItem.description || '').trim(),
@@ -191,6 +206,7 @@ export async function GET(request: Request) {
     const hasSearch = Boolean(search?.trim());
     const projection = {
       payItemNumber: 1,
+      classificationId: 1,
       payItemDescription: 1,
       unitOfMeasurement: 1,
       outputPerHour: 1,
@@ -268,6 +284,9 @@ export async function POST(request: Request) {
       try {
         const validated = DUPATemplateSchema.parse(template);
         const resolved = await resolvePayItemSnapshot(validated);
+        if (requiresClassification((resolved as any).part) && !String((resolved as any).classificationId || '').trim()) {
+          throw new Error('Part E DUPA templates require a category or sub-category selection');
+        }
         validatedTemplates.push(resolved);
       } catch (validationError: any) {
         return NextResponse.json(

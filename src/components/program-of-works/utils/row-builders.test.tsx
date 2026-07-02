@@ -31,6 +31,30 @@ describe('row-builders', () => {
     expect(screen.getByText('100%')).toBeInTheDocument();
   });
 
+  it('buildWorksRows avoids repeating normalized part descriptions', () => {
+    const worksItems: WorksPart[] = [
+      {
+        part: 'PART C: EARTHWORK',
+        partDescription: 'EARTHWORK',
+        division: 'DIVISION I',
+        items: [],
+        asSubmitted: 1000,
+        percent: 100,
+      },
+    ];
+
+    const rows = buildWorksRows(worksItems, formatCurrency);
+
+    render(
+      <table>
+        <tbody>{rows}</tbody>
+      </table>,
+    );
+
+    expect(screen.getByText('PART C: EARTHWORK')).toBeInTheDocument();
+    expect(screen.queryByText('PART C: EARTHWORK - EARTHWORK')).not.toBeInTheDocument();
+  });
+
   it('buildItemizedRows renders grand total and division totals', () => {
     const parts: ItemizedPart[] = [
       {

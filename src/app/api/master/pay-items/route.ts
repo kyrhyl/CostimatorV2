@@ -7,12 +7,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/connect';
 import PayItem from '@/models/PayItem';
 import { z } from 'zod';
+import { normalizePart, inferPartFromPayItemNumber } from '@/lib/utils/dpwh-constants';
+import { requiresClassification, resolveClassificationInput } from '@/lib/classifications/pay-item';
 
 // ============================================================================
 // Validation Schemas
 // ============================================================================
 
 const PayItemSchema = z.object({
+  classificationId: z.string().optional(),
   division: z.string().min(1, 'Division is required'),
   part: z.string().min(1, 'Part is required'),
   item: z.string().min(1, 'Item is required'),
@@ -120,6 +123,7 @@ export async function GET(request: NextRequest) {
     // Execute query with pagination
     const [payItems, total] = await Promise.all([
       PayItem.find(query)
+        .populate('classificationId')
         .sort({ [sortBy]: order })
         .skip(skip)
         .limit(limit)
@@ -181,6 +185,18 @@ export async function POST(request: NextRequest) {
       
       for (const itemData of validation.data as any[]) {
         try {
+          const inferredPart = inferPartFromPayItemNumber(itemData.payItemNumber);
+          const normalizedPart = inferredPart || normalizePart(String(itemData.part || '')) || String(itemData.part || '').trim();
+          const resolvedClassification = await resolveClassificationInput({
+            classificationId: itemData.classificationId,
+            part: normalizedPart,
+            category: itemData.category,
+            subCategory: itemData.subCategory,
+          });
+          if (requiresClassification(normalizedPart) && !resolvedClassification.classificationId) {
+            throw new Error('Part E pay items require a category or sub-category selection');
+          }
+
           // Check for existing pay item number
           const existing = await PayItem.findOne({ payItemNumber: itemData.payItemNumber });
           if (existing) {
@@ -188,7 +204,13 @@ export async function POST(request: NextRequest) {
             continue;
           }
           
-          const payItem = await PayItem.create(itemData);
+          const payItem = await PayItem.create({
+            ...itemData,
+            part: normalizedPart,
+            classificationId: resolvedClassification.classificationId || undefined,
+            category: resolvedClassification.category,
+            subCategory: resolvedClassification.subCategory,
+          });
           results.success.push(payItem);
         } catch (error: any) {
           results.failed.push({
@@ -229,7 +251,28 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      const payItem = await PayItem.create(validation.data as any);
+      const inferredPart = inferPartFromPayItemNumber((validation.data as any).payItemNumber);
+      const normalizedPart = inferredPart || normalizePart(String((validation.data as any).part || '')) || String((validation.data as any).part || '').trim();
+      const resolvedClassification = await resolveClassificationInput({
+        classificationId: (validation.data as any).classificationId,
+        part: normalizedPart,
+        category: (validation.data as any).category,
+        subCategory: (validation.data as any).subCategory,
+      });
+      if (requiresClassification(normalizedPart) && !resolvedClassification.classificationId) {
+        return NextResponse.json(
+          { success: false, error: 'Part E pay items require a category or sub-category selection' },
+          { status: 400 }
+        );
+      }
+
+      const payItem = await PayItem.create({
+        ...(validation.data as any),
+        part: normalizedPart,
+        classificationId: resolvedClassification.classificationId || undefined,
+        category: resolvedClassification.category,
+        subCategory: resolvedClassification.subCategory,
+      });
       
       return NextResponse.json({
         success: true,

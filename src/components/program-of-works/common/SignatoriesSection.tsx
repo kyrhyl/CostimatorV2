@@ -6,7 +6,7 @@ interface SignatoriesSectionProps {
 
 export function SignatoriesSection({ signatories }: SignatoriesSectionProps) {
   return (
-    <div className="grid grid-cols-4 gap-2 mt-2 text-[0.6rem]">
+    <div className="grid grid-cols-4 gap-2 mt-1 text-[0.6rem]">
       <div className="text-center">
         <div className="text-left font-bold h-8">Prepared by:</div>
         <div className="h-0"></div>

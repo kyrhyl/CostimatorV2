@@ -31,6 +31,10 @@ function isConsumablesRow(row: { description?: string }) {
   return /^consumables\s*\(/i.test(String(row.description || '').trim());
 }
 
+function isMinorToolsRow(row: { description?: string }) {
+  return /^minor tools\s*\(/i.test(String(row.description || '').trim());
+}
+
 export function FormDUPAPage({
   report,
   item,
@@ -174,7 +178,7 @@ export function FormDUPAPage({
             <tr key={getEquipmentRowKey(row, idx)}>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{idx === 0 ? 'B.1' : ''}</td>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isMinorToolsRow(row) ? (
                   <div>
                     <input
                       list="dupa-equipment-suggestions"
@@ -189,19 +193,19 @@ export function FormDUPAPage({
                 ) : row.description}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isMinorToolsRow(row) ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.noOfUnits)} onChange={(e) => onEquipmentFieldChange?.(idx, 'noOfUnits', Number(e.target.value || 0))} />
-                ) : (row.noOfUnits > 0 ? formatNumber(row.noOfUnits) : '-')}
+                ) : (isMinorToolsRow(row) ? '-' : (row.noOfUnits > 0 ? formatNumber(row.noOfUnits) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isMinorToolsRow(row) ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.noOfHours)} onChange={(e) => onEquipmentFieldChange?.(idx, 'noOfHours', Number(e.target.value || 0))} />
-                ) : (row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-')}
+                ) : (isMinorToolsRow(row) ? '-' : (row.noOfHours > 0 ? formatNumber(row.noOfHours) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isMinorToolsRow(row) ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.hourlyRate)} onChange={(e) => onEquipmentFieldChange?.(idx, 'hourlyRate', Number(e.target.value || 0))} />
-                ) : (row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-')}
+                ) : (isMinorToolsRow(row) ? '-' : (row.hourlyRate > 0 ? formatNumber(row.hourlyRate) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>{row.amount > 0 ? formatCurrency(row.amount) : '-'}</td>
             </tr>
@@ -229,7 +233,7 @@ export function FormDUPAPage({
             <tr key={getMaterialRowKey(row, idx)}>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>{idx === 0 ? 'F.1' : ''}</td>
               <td className="px-1 py-[1px]" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isConsumablesRow(row) ? (
                   <div>
                     <input
                       list="dupa-material-suggestions"
@@ -244,17 +248,17 @@ export function FormDUPAPage({
                 ) : row.description}
               </td>
               <td className="px-1 py-[1px] text-center" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isConsumablesRow(row) ? (
                   <input className={inputClass} value={row.unit} onChange={(e) => onMaterialFieldChange?.(idx, 'unit', e.target.value)} />
                 ) : (isConsumablesRow(row) ? '-' : row.unit)}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isConsumablesRow(row) ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.quantity)} onChange={(e) => onMaterialFieldChange?.(idx, 'quantity', Number(e.target.value || 0))} />
                 ) : (isConsumablesRow(row) ? '-' : (row.quantity > 0 ? formatNumber(row.quantity) : '-'))}
               </td>
               <td className="px-1 py-[1px] text-right" style={{ border: '1px solid #000' }}>
-                {editable ? (
+                {editable && !isConsumablesRow(row) ? (
                   <input className={inputClass} type="number" value={toInputNumber(row.unitCost)} onChange={(e) => onMaterialFieldChange?.(idx, 'unitCost', Number(e.target.value || 0))} />
                 ) : (isConsumablesRow(row) ? '-' : (row.unitCost > 0 ? formatCurrency(row.unitCost) : '-'))}
               </td>

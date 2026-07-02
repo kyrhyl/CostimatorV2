@@ -1,6 +1,6 @@
 @page landscapePage {
   size: A4 landscape;
-  margin: 0;
+  margin: 15mm 15mm;
   @top-left { content: none; }
   @top-center { content: none; }
   @top-right { content: none; }
@@ -11,7 +11,7 @@
 
 @page portraitPage {
   size: A4 portrait;
-  margin: 0;
+  margin: 15mm 15mm;
   @top-left { content: none; }
   @top-center { content: none; }
   @top-right { content: none; }
@@ -34,13 +34,13 @@
 
 .printScope :global(.a4-page) {
   background: white;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid #d0d0d0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   margin: 20px auto;
   padding: 5mm 10mm 5mm 10mm;
   box-sizing: border-box;
   position: relative;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .printScope :global(.a4-page-landscape) {
@@ -62,10 +62,13 @@
 .printScope :global(.a4-page::after) {
   content: "Page " attr(data-page);
   position: absolute;
-  bottom: 5mm;
-  right: 10mm;
-  font-size: 8px;
-  color: #999;
+  bottom: 0;
+  right: 0;
+  font-size: 9px;
+  color: #888;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-top-left-radius: 3px;
 }
 
 .printScope :global(.itemized-table) {
@@ -114,11 +117,13 @@
   .printScope :global(.a4-page) {
     box-shadow: none;
     margin: 0;
+    padding: 5mm 10mm !important;
     width: auto !important;
     min-height: auto !important;
     height: auto !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    overflow: visible;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .printScope :global(.a4-page[data-orientation='landscape']),

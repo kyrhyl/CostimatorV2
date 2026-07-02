@@ -973,7 +973,7 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
         id: line._id || `${partKey}-${line.payItemNumber}-${group.items.length}`,
         lineKey,
         part: partKey,
-        subGroup: getPartKey(partKey) === 'PART E' ? String((line as any).subCategory || (line as any).category || '') : '',
+        subGroup: String((line as any).subCategory || (line as any).category || ''),
         itemNo: String(line.payItemNumber || ''),
         description: String(line.payItemDescription || ''),
         quantity,

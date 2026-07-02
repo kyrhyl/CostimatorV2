@@ -38,8 +38,8 @@ export function ProjectInfoSection({ header, variant }: ProjectInfoSectionProps)
   }
 
   return (
-    <div className="h-[24mm] grid grid-cols-[130mm_75mm_70mm] gap-0 text-[0.65rem] mb-2">
-      <div className="p-1">
+    <div className="grid grid-cols-[130mm_75mm_70mm] gap-0 text-[0.65rem] mb-1">
+      <div className="p-0.5">
         <div className="flex">
           <span className="w-36 font-semibold">Implementing Office:</span>
           <span className="flex-1">{header.implementingOffice}</span>
@@ -57,7 +57,7 @@ export function ProjectInfoSection({ header, variant }: ProjectInfoSectionProps)
           <span className="flex-1">{header.projectLocation}</span>
         </div>
       </div>
-      <div className="ml-8 p-1">
+      <div className="ml-8 p-0.5">
         <div className="flex">
           <span className="w-36 font-semibold">Date Prepared:</span>
           <span className="flex-1">{header.datePrepared}</span>
@@ -71,7 +71,7 @@ export function ProjectInfoSection({ header, variant }: ProjectInfoSectionProps)
           <span className="flex-1">{header.targetCompletionDate}</span>
         </div>
       </div>
-      <div className="ml-8 p-1">
+      <div className="ml-8 p-0.5">
         <div className="flex">
           <span className="w-40 font-semibold">Contract Duration:</span>
           <span className="flex-1">{header.contractDurationCD.toFixed(2)} CD</span>

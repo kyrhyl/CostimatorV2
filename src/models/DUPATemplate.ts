@@ -55,6 +55,7 @@ const materialTemplateSchema = new Schema<IMaterialTemplate>({
 // =============================================
 export interface IDUPATemplate extends Document {
   payItemId?: mongoose.Types.ObjectId;    // Reference to PayItem collection (optional)
+  classificationId?: mongoose.Types.ObjectId;
   payItemNumber: string;
   normalizedPayItemNumber?: string;
   payItemDescription: string;
@@ -97,6 +98,12 @@ const dupaTemplateSchema = new Schema<IDUPATemplate>(
       type: Schema.Types.ObjectId,
       ref: 'PayItem',
       required: false
+    },
+    classificationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PayItemClassification',
+      required: false,
+      index: true,
     },
     payItemNumber: {
       type: String,

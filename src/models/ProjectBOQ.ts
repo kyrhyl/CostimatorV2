@@ -37,6 +37,7 @@ export interface IComputedMaterial {
 export interface IProjectBOQ extends Document {
   projectId: Types.ObjectId;
   templateId: Types.ObjectId; // Reference to source DUPA template
+  classificationId?: Types.ObjectId;
   
   // Template information (copied at creation)
   payItemNumber: string;
@@ -119,6 +120,12 @@ const ProjectBOQSchema = new Schema<IProjectBOQ>(
       type: Schema.Types.ObjectId,
       ref: 'DUPATemplate',
       required: true
+    },
+    classificationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PayItemClassification',
+      required: false,
+      index: true,
     },
     payItemNumber: { type: String, required: true },
     payItemDescription: { type: String, required: true },

@@ -143,6 +143,17 @@ export default function ManualPowConfigModal({
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
               />
             </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">EAO %</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={configForm.eaoPercentage}
+                onChange={(e) => onConfigFormChange({ ...configForm, eaoPercentage: Number(e.target.value) })}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+            </div>
           </div>
 
           <div>

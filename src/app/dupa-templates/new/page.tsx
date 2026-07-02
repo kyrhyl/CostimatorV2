@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Combobox from '@/components/Combobox';
+import { findClassificationId, getCategoriesForPart, getSubCategoriesForPartCategory, type ClassificationOption } from '@/lib/classifications/client';
 
 interface LaborEntry {
   designation: string;
@@ -63,8 +64,10 @@ export default function NewDUPATemplatePage() {
   const [payItemDescription, setPayItemDescription] = useState('');
   const [unitOfMeasurement, setUnitOfMeasurement] = useState('');
   const [selectedPayItemId, setSelectedPayItemId] = useState<string>('');
+  const [classificationId, setClassificationId] = useState('');
   const [outputPerHour, setOutputPerHour] = useState(1);
   const [category, setCategory] = useState('');
+  const [subCategory, setSubCategory] = useState('');
   const [specification, setSpecification] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -78,7 +81,8 @@ export default function NewDUPATemplatePage() {
   // Master data for dropdowns
   const [equipmentOptions, setEquipmentOptions] = useState<Array<{ _id: string; description: string }>>([]);
   const [materialOptions, setMaterialOptions] = useState<Array<{ materialCode: string; description: string; unit: string }>>([]);
-  const [payItemOptions, setPayItemOptions] = useState<Array<{ _id: string; payItemNumber: string; description: string; unit: string; part: string }>>([]);
+  const [payItemOptions, setPayItemOptions] = useState<Array<{ _id: string; payItemNumber: string; description: string; unit: string; part: string; classificationId?: string; category?: string; subCategory?: string }>>([]);
+  const [classifications, setClassifications] = useState<ClassificationOption[]>([]);
   const [availableParts, setAvailableParts] = useState<string[]>([]);
   const [selectedPart, setSelectedPart] = useState<string>('');
   const [loadingOptions, setLoadingOptions] = useState(true);
@@ -111,6 +115,8 @@ export default function NewDUPATemplatePage() {
     : selectedPart
       ? `Search ${selectedPart} pay items`
       : 'Search pay items';
+  const categoryOptions = getCategoriesForPart(classifications, selectedPart);
+  const subCategoryOptions = getSubCategoriesForPartCategory(classifications, selectedPart, category);
 
   // Minor Tools configuration
   const [includeMinorTools, setIncludeMinorTools] = useState(false);
@@ -125,13 +131,14 @@ export default function NewDUPATemplatePage() {
   useEffect(() => {
     const loadMasterData = async () => {
       try {
-        const [eqRes, matRes, matPriceRes, payRes] = await Promise.all([
+        const [eqRes, matRes, matPriceRes, payRes, classificationRes] = await Promise.all([
           fetch('/api/master/equipment'),
           fetch('/api/master/materials'),
           fetch('/api/master/materials/prices?isActive=true'),
-          fetch('/api/master/pay-items?limit=2000')
+          fetch('/api/master/pay-items?limit=2000'),
+          fetch('/api/master/pay-item-classifications'),
         ]);
-        const [eqJson, matJson, matPriceJson, payJson] = await Promise.all([eqRes.json(), matRes.json(), matPriceRes.json(), payRes.json()]);
+        const [eqJson, matJson, matPriceJson, payJson, classificationJson] = await Promise.all([eqRes.json(), matRes.json(), matPriceRes.json(), payRes.json(), classificationRes.json()]);
         if (eqJson.success) {
           const options = eqJson.data.map((e: any) => ({
             _id: e._id,
@@ -154,7 +161,10 @@ export default function NewDUPATemplatePage() {
             payItemNumber: p.payItemNumber, 
             description: p.description, 
             unit: p.unit,
-            part: p.part 
+            part: p.part,
+            classificationId: p.classificationId?._id || p.classificationId || '',
+            category: p.category || '',
+            subCategory: p.subCategory || '',
           }));
           setPayItemOptions(payItems);
           
@@ -164,6 +174,9 @@ export default function NewDUPATemplatePage() {
           console.log('Available parts:', uniqueParts);
           console.log('Pay items sample:', payItems.slice(0, 3));
           setAvailableParts(uniqueParts);
+        }
+        if (classificationJson.success) {
+          setClassifications(Array.isArray(classificationJson.data) ? classificationJson.data : []);
         }
       } catch (e) {
         console.error('Failed to load master data', e);
@@ -247,6 +260,9 @@ export default function NewDUPATemplatePage() {
       setPayItemNumber('');
       setPayItemDescription('');
       setUnitOfMeasurement('');
+      setClassificationId('');
+      setCategory('');
+      setSubCategory('');
       return;
     }
 
@@ -255,6 +271,10 @@ export default function NewDUPATemplatePage() {
       setPayItemNumber(selectedPayItem.payItemNumber);
       setPayItemDescription(selectedPayItem.description);
       setUnitOfMeasurement(selectedPayItem.unit);
+      setSelectedPart(selectedPayItem.part || '');
+      setClassificationId(selectedPayItem.classificationId || findClassificationId(classifications, selectedPayItem.part || '', selectedPayItem.category || '', selectedPayItem.subCategory || ''));
+      setCategory(selectedPayItem.category || '');
+      setSubCategory(selectedPayItem.subCategory || '');
     }
   };
 
@@ -266,6 +286,9 @@ export default function NewDUPATemplatePage() {
     setPayItemNumber('');
     setPayItemDescription('');
     setUnitOfMeasurement('');
+    setClassificationId('');
+    setCategory('');
+    setSubCategory('');
   };
 
   const handleEquipmentSearch = async (query: string) => {
@@ -364,11 +387,13 @@ export default function NewDUPATemplatePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payItemId: selectedPayItemId,
+          classificationId,
           payItemNumber: payItemNumber.trim(),
           payItemDescription: payItemDescription.trim(),
           unitOfMeasurement: unitOfMeasurement.trim(),
           outputPerHour: Number(outputPerHour),
           category: category.trim(),
+          subCategory: subCategory.trim(),
           specification: specification.trim(),
           notes: notes.trim(),
           laborTemplate: validLaborTemplate,
@@ -524,21 +549,39 @@ export default function NewDUPATemplatePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => {
+                    const nextCategory = e.target.value;
+                    setCategory(nextCategory);
+                    setSubCategory('');
+                    setClassificationId(findClassificationId(classifications, selectedPart, nextCategory, ''));
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={Boolean(selectedPayItemId)}
                 >
                   <option value="">Select category</option>
-                  <option value="Earthwork">Earthwork</option>
-                  <option value="Concrete">Concrete</option>
-                  <option value="Masonry">Masonry</option>
-                  <option value="Reinforcement">Reinforcement</option>
-                  <option value="Formwork">Formwork</option>
-                  <option value="Structural Steel">Structural Steel</option>
-                  <option value="Roofing">Roofing</option>
-                  <option value="Painting">Painting</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Other">Other</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">{selectedPayItemId ? 'Sourced from the selected pay item.' : 'Choose from the shared classification list.'}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sub-Category</label>
+                <select
+                  value={subCategory}
+                  onChange={(e) => {
+                    const nextSubCategory = e.target.value;
+                    setSubCategory(nextSubCategory);
+                    setClassificationId(findClassificationId(classifications, selectedPart, category, nextSubCategory));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={Boolean(selectedPayItemId) || !category || subCategoryOptions.length === 0}
+                >
+                  <option value="">{subCategoryOptions.length === 0 ? 'No sub-category' : 'Select sub-category'}</option>
+                  {subCategoryOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
 

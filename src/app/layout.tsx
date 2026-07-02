@@ -19,8 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <script dangerouslySetInnerHTML={{
+          __html: `(function(){var d=document;var r=function(){var a=d.querySelectorAll('[fdprocessedid]');for(var i=0;i<a.length;i++){a[i].removeAttribute('fdprocessedid')}};r();new MutationObserver(r).observe(d.documentElement,{attributes:true,subtree:true,childList:true,attributeFilter:['fdprocessedid']})})()`
+        }} />
         <Providers>
           <Header />
           {children}

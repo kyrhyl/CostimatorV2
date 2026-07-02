@@ -88,14 +88,31 @@ export default function ProgramOfWorksItemizedTable({
         partPercent: computePercentOfProjectCost(group.totalAmount, grandTotal),
       });
 
-      const orderedItems = group.part.startsWith('PART E')
+      const minItemNoByGroup = new Map<string, string>();
+      for (const item of group.items) {
+        const sub = String(item.subGroup || '').trim();
+        if (sub) {
+          const existing = minItemNoByGroup.get(sub);
+          if (!existing || item.itemNo.localeCompare(existing, undefined, { numeric: true }) < 0) {
+            minItemNoByGroup.set(sub, item.itemNo);
+          }
+        }
+      }
+
+      const isPartBCOrD = group.part.startsWith('PART B') || group.part.startsWith('PART C') || group.part.startsWith('PART D');
+      const orderedItems = !isPartBCOrD && group.items.some((i) => i.subGroup)
         ? [...group.items].sort((left, right) => {
             const leftGroup = String(left.subGroup || '').trim();
             const rightGroup = String(right.subGroup || '').trim();
             if (leftGroup !== rightGroup) {
               if (!leftGroup) return 1;
               if (!rightGroup) return -1;
-              return leftGroup.localeCompare(rightGroup, undefined, { sensitivity: 'base' });
+              const byGroup = (minItemNoByGroup.get(leftGroup) || '').localeCompare(
+                minItemNoByGroup.get(rightGroup) || '',
+                undefined,
+                { numeric: true }
+              );
+              if (byGroup !== 0) return byGroup;
             }
 
             return left.itemNo.localeCompare(right.itemNo, undefined, { numeric: true, sensitivity: 'base' });
@@ -104,8 +121,8 @@ export default function ProgramOfWorksItemizedTable({
 
       let currentSubGroup = '';
       orderedItems.forEach((item) => {
-        const nextSubGroup = group.part.startsWith('PART E') ? formatSubGroupLabel(String(item.subGroup || '')) : '';
-        if (group.part.startsWith('PART E') && nextSubGroup && nextSubGroup !== currentSubGroup) {
+        const nextSubGroup = !isPartBCOrD && item.subGroup ? formatSubGroupLabel(item.subGroup) : '';
+        if (nextSubGroup && nextSubGroup !== currentSubGroup) {
           currentSubGroup = nextSubGroup;
           rows.push({
             kind: 'subheader',

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { normalizePart } from '@/lib/utils/dpwh-constants';
 
 interface DUPATemplate {
   _id: string;
@@ -22,17 +23,6 @@ interface DUPATemplate {
   createdAt: string;
   updatedAt: string;
 }
-
-const getCanonicalPartValue = (value?: string | null) => {
-  const normalizedValue = value?.trim();
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  const canonicalMatch = normalizedValue.toUpperCase().match(/^PART\s+[A-Z]/);
-  return canonicalMatch ? canonicalMatch[0] : normalizedValue;
-};
 
 const getUniqueNormalizedValues = (
   values: Array<string | null | undefined>,
@@ -130,7 +120,7 @@ export default function DUPATemplatesPage() {
 
         // Extract unique parts
         if (page === 1) {
-          const uniqueParts = getUniqueNormalizedValues(nextRows.map((t: DUPATemplate) => t.part), getCanonicalPartValue);
+          const uniqueParts = getUniqueNormalizedValues(nextRows.map((t: DUPATemplate) => t.part), (v) => normalizePart(v ?? undefined));
           setParts(uniqueParts);
 
           // Extract unique categories

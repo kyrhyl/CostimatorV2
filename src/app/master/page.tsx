@@ -36,6 +36,14 @@ export default function MasterDataPage() {
       color: 'purple',
       stats: 'Complete DPWH database'
     },
+    {
+      title: 'Classifications',
+      description: 'Shared source of truth for parts, categories, and sub-categories used by pay items and DUPA templates',
+      href: '/master/pay-item-classifications',
+      icon: '🗂️',
+      color: 'indigo',
+      stats: 'Dropdown source of truth'
+    },
   ];
 
   const colorClasses = {

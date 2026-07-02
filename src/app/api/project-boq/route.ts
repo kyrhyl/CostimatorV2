@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     body.part = normalizePart(String(body.part || '')) || body.part || 'UNASSIGNED PART';
+    body.classificationId = String(body.classificationId || '').trim() || undefined;
+    body.category = String(body.category || '').trim();
     body.subCategory = String(body.subCategory || '').trim();
 
     // Log what we're receiving for debugging

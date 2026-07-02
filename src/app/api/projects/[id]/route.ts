@@ -95,6 +95,7 @@ const ProjectUpdateSchema = z.object({
       laborVersion: z.string().optional(),
       district: z.string().optional(),
       vatPercentage: z.number().optional(),
+      eaoPercentage: z.number().optional(),
       notes: z.string().optional(),
     })
     .optional(),

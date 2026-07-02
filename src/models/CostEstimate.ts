@@ -74,6 +74,7 @@ export interface IComputedMaterial {
 
 export interface IEstimateLine {
   lineId?: string;
+  classificationId?: mongoose.Types.ObjectId;
   // BOQ source
   payItemNumber: string;
   payItemDescription: string;
@@ -255,6 +256,7 @@ const ComputedMaterialSchema = new Schema({
 
 const EstimateLineSchema = new Schema({
   lineId: { type: String, default: '' },
+  classificationId: { type: Schema.Types.ObjectId, ref: 'PayItemClassification', required: false },
   payItemNumber: { type: String, required: true },
   payItemDescription: { type: String, required: true },
   unit: { type: String, required: true },

@@ -76,6 +76,14 @@ function uniqueSuggestions(values: string[]): string[] {
   return result;
 }
 
+function isMinorToolsRow(row: { description?: string }) {
+  return /^minor tools\s*\(/i.test(String(row.description || '').trim());
+}
+
+function isConsumablesRow(row: { description?: string }) {
+  return /^consumables\s*\(/i.test(String(row.description || '').trim());
+}
+
 function recomputeItem(item: EditableItem): EditableItem {
   const laborItems = item.laborItems.map((row) => ({
     ...row,
@@ -583,13 +591,13 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           {showActionColumn ? <th className="text-center pb-2">Action</th> : null}
                         </tr>
                       </thead>
-                      <tbody>
-                        {selectedItem.equipmentItems.map((row, idx) => (
-                          <tr key={`equipment-${idx}`} className="border-t border-slate-100">
-                            <td className="py-1">{editing ? <input list="dupa-equipment-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
-                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfUnits} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfUnits: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfUnits)}</td>
-                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.noOfHours)}</td>
-                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.hourlyRate)}</td>
+                        <tbody>
+                          {selectedItem.equipmentItems.map((row, idx) => (
+                            <tr key={`equipment-${idx}`} className="border-t border-slate-100">
+                            <td className="py-1">{editing && !isMinorToolsRow(row) ? <input list="dupa-equipment-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
+                            <td className="py-1 text-right tabular-nums">{editing && !isMinorToolsRow(row) ? <input type="number" className={inputClass} value={row.noOfUnits} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfUnits: Number(e.target.value || 0) } : entry) }))} /> : (isMinorToolsRow(row) ? '-' : formatNumber(row.noOfUnits))}</td>
+                            <td className="py-1 text-right tabular-nums">{editing && !isMinorToolsRow(row) ? <input type="number" className={inputClass} value={row.noOfHours} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, noOfHours: Number(e.target.value || 0) } : entry) }))} /> : (isMinorToolsRow(row) ? '-' : formatNumber(row.noOfHours))}</td>
+                            <td className="py-1 text-right tabular-nums">{editing && !isMinorToolsRow(row) ? <input type="number" className={inputClass} value={row.hourlyRate} onChange={(e) => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, hourlyRate: Number(e.target.value || 0) } : entry) }))} /> : (isMinorToolsRow(row) ? '-' : formatNumber(row.hourlyRate))}</td>
                             <td className="py-1 text-right tabular-nums">{formatCurrency(row.amount)}</td>
                             {showActionColumn ? <td className="py-1 text-center">{selectedItem.equipmentItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, equipmentItems: current.equipmentItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td> : null}
                           </tr>
@@ -633,13 +641,13 @@ export function DupaWorkspaceTab(props: DupaWorkspaceTabProps) {
                           {showActionColumn ? <th className="text-center pb-2">Action</th> : null}
                         </tr>
                       </thead>
-                      <tbody>
-                        {selectedItem.materialItems.map((row, idx) => (
-                          <tr key={`material-${idx}`} className="border-t border-slate-100">
-                            <td className="py-1">{editing ? <input list="dupa-material-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
-                            <td className="py-1 text-right">{editing ? <input className={`${inputClass} text-right`} value={row.unit} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unit: e.target.value } : entry) }))} /> : row.unit}</td>
-                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.quantity} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, quantity: Number(e.target.value || 0) } : entry) }))} /> : formatNumber(row.quantity)}</td>
-                            <td className="py-1 text-right tabular-nums">{editing ? <input type="number" className={inputClass} value={row.unitCost} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unitCost: Number(e.target.value || 0) } : entry) }))} /> : formatCurrency(row.unitCost)}</td>
+                        <tbody>
+                          {selectedItem.materialItems.map((row, idx) => (
+                            <tr key={`material-${idx}`} className="border-t border-slate-100">
+                            <td className="py-1">{editing && !isConsumablesRow(row) ? <input list="dupa-material-suggestions-modern" className={inputClass} value={row.description} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, description: e.target.value } : entry) }))} /> : row.description}</td>
+                            <td className="py-1 text-right">{editing && !isConsumablesRow(row) ? <input className={`${inputClass} text-right`} value={row.unit} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unit: e.target.value } : entry) }))} /> : (isConsumablesRow(row) ? '-' : row.unit)}</td>
+                            <td className="py-1 text-right tabular-nums">{editing && !isConsumablesRow(row) ? <input type="number" className={inputClass} value={row.quantity} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, quantity: Number(e.target.value || 0) } : entry) }))} /> : (isConsumablesRow(row) ? '-' : formatNumber(row.quantity))}</td>
+                            <td className="py-1 text-right tabular-nums">{editing && !isConsumablesRow(row) ? <input type="number" className={inputClass} value={row.unitCost} onChange={(e) => updateDraft((current) => ({ ...current, materialItems: current.materialItems.map((entry, entryIndex) => entryIndex === idx ? { ...entry, unitCost: Number(e.target.value || 0) } : entry) }))} /> : (isConsumablesRow(row) ? '-' : formatCurrency(row.unitCost))}</td>
                             <td className="py-1 text-right tabular-nums">{formatCurrency(row.amount)}</td>
                             {showActionColumn ? <td className="py-1 text-center">{selectedItem.materialItems.length > 1 ? <button type="button" className="text-xs text-red-600" onClick={() => updateDraft((current) => ({ ...current, materialItems: current.materialItems.filter((_, entryIndex) => entryIndex !== idx) }))}>Remove</button> : null}</td> : null}
                           </tr>
