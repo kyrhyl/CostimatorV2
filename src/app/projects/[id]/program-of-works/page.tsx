@@ -626,10 +626,13 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
     };
   });
 
-  const totalDirectCost = items.reduce((sum, item) => sum + (Number(item.directCost || 0) * Number(item.quantity || 0)), 0);
-  const totalOCM = items.reduce((sum, item) => sum + (Number(item.ocmCost || 0) * Number(item.quantity || 0)), 0);
-  const totalCP = items.reduce((sum, item) => sum + (Number(item.cpCost || 0) * Number(item.quantity || 0)), 0);
-  const totalVAT = items.reduce((sum, item) => sum + (Number(item.vatCost || 0) * Number(item.quantity || 0)), 0);
+  const totalDirectCost = estimateLines.reduce(
+    (sum, line) => sum + (Number(line.directCost || 0) * Number(line.quantity || 0)),
+    0,
+  );
+  const totalOCM = estimateLines.reduce((sum, line) => sum + Number(line.ocmCost || 0), 0);
+  const totalCP = estimateLines.reduce((sum, line) => sum + Number(line.cpCost || 0), 0);
+  const totalVAT = estimateLines.reduce((sum, line) => sum + Number(line.vatCost || 0), 0);
   const subtotalWithMarkup = totalDirectCost + totalOCM + totalCP;
   const computedGrandTotal = subtotalWithMarkup + totalVAT;
   const amountGrandTotal = items.reduce(
@@ -1380,7 +1383,10 @@ const buildManualEstimate = (items: ProjectBoqItem[]) => {
                     loading={loadingManualBoq}
                     readOnly={project?.powMode !== 'manual' || !canModifyPow}
                     onReload={loadManualBoq}
-                    onManualConfigSaved={fetchProject}
+                    onManualConfigSaved={async () => {
+                      await fetchProject();
+                      await loadPrescribedBreakdown();
+                    }}
                     onManualVersionSaved={async () => {
                       await loadEstimates();
                       await loadDupaReport();
